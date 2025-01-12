@@ -1,6 +1,6 @@
 [paths]
 output = "quran-bot"
-source = ["."]
+source = [".", "Polyweb", "Polyweb/Polynet"]
 artifact = "obj"
 
 [options]
