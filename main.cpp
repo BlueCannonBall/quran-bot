@@ -31,7 +31,7 @@ std::string to_superscript(int number) {
 
 std::string surah_name(int surah) {
     // clang-format off
-    static const std::string surah_names[] = {
+    const static std::string surah_names[] = {
         "Al-Fatiha", "Al-Baqarah", "Aal-E-Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am",
         "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim",
         "Al-Hijr", "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Ta-Ha", "Al-Anbiya", "Al-Hajj",
