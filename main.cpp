@@ -96,12 +96,11 @@ int main() {
             dpp::slashcommand quote_command("quote", "Quote the Holy Qur'an", bot.me.id);
             quote_command.add_option(dpp::command_option(dpp::co_string, "verses", "The verses to quote (e.g. 2:255 or 2:255-256)", true));
             quote_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
-
             bot.global_bulk_command_create({quote_command});
         }
     });
 
-    bot.register_command("quote", [&quran](const dpp::slashcommand_t& event) {
+    bot.register_command("quote", [&quran, &bot](const dpp::slashcommand_t& event) {
         std::istringstream verses(std::get<std::string>(event.get_parameter("verses")));
 
         unsigned short surah;
@@ -110,10 +109,14 @@ int main() {
         verses.ignore(); // Ignore ':'
         verses >> first_ayah;
 
+        std::string text;
+
         if (surah > 114) {
             event.reply(dpp::message("Invalid `verses` parameter!").set_flags(dpp::m_ephemeral));
+            return;
         } else if (first_ayah > 286) {
             event.reply(dpp::message("Invalid `verses` parameter!").set_flags(dpp::m_ephemeral));
+            return;
         } else if (verses.get() == '-') {
             unsigned short last_ayah;
             verses >> last_ayah;
@@ -122,24 +125,21 @@ int main() {
                 return;
             }
 
-            std::string text;
             for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                text += to_superscript(ayah) + ' ' + quran[surah][first_ayah];
+                text += to_superscript(ayah) + ' ' + quran[surah][ayah];
                 if (ayah != last_ayah) text.push_back(' ');
             }
-
-            dpp::embed embed = dpp::embed();
-            embed.set_color(0x009736);
-            embed.set_title("Surah " + surah_name(surah) + ' ' + verses.str());
-            embed.set_description(text);
-            event.reply(embed);
         } else {
-            dpp::embed embed = dpp::embed();
-            embed.set_color(0x009736);
-            embed.set_title("Surah " + surah_name(surah) + ' ' + verses.str());
-            embed.set_description(quran[surah][first_ayah]);
-            event.reply(embed);
+            text = quran[surah][first_ayah];
         }
+
+        dpp::embed embed = dpp::embed();
+        embed.set_color(0x009736);
+        embed.set_author("Dr. Mustafa Khattab, The Clear Quran", "https://theclearquran.org/", "https://theclearquran.org/favicon.ico");
+        embed.set_title("Surah " + surah_name(surah) + " (" + verses.str() + ')');
+        embed.set_description(text);
+        embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+        event.reply(embed);
     });
 
     bot.start(dpp::st_wait);
