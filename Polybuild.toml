@@ -1,0 +1,8 @@
+[paths]
+output = "quran-bot"
+source = ["."]
+artifact = "obj"
+
+[options]
+compilation-flags = "-Wall -std=c++17 -O3"
+libraries = ["dpp", "ssl", "crypto"]
