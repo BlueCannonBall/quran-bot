@@ -60,7 +60,7 @@ std::string surah_name(int surah) {
 int main() {
     std::string quran[115][287];
 
-    for (unsigned short i = 0; i < 116; ++i) {
+    for (unsigned short i = 0; i < 115; ++i) {
         for (unsigned short j = 0; j < 287; ++j) {
             quran[i][j] = "⚠️ This verse does not exist. ⚠️";
         }
