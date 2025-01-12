@@ -1,4 +1,5 @@
 #include "Polyweb/polyweb.hpp"
+#include "Polyweb/string.hpp"
 #include "json.hpp"
 #include <dpp/dpp.h>
 #include <iostream>
@@ -8,6 +9,7 @@
 #include <stdexcept>
 #include <stdlib.h>
 #include <string>
+#include <utility>
 
 using nlohmann::json;
 
@@ -30,7 +32,7 @@ std::string to_superscript(int number) {
 std::string surah_name(int surah) {
     // clang-format off
     static const std::string surah_names[] = {
-        {}, "Al-Fatiha", "Al-Baqarah", "Aal-E-Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am",
+        "Al-Fatiha", "Al-Baqarah", "Aal-E-Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am",
         "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim",
         "Al-Hijr", "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Ta-Ha", "Al-Anbiya", "Al-Hajj",
         "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-Ankabut",
@@ -51,13 +53,19 @@ std::string surah_name(int surah) {
     // clang-format on
 
     if (surah >= 1 && surah <= 114) {
-        return surah_names[surah];
+        return surah_names[surah - 1];
     } else {
         throw std::invalid_argument("Invalid surah number");
     }
 }
 
+std::string verse_key(unsigned short surah, unsigned short ayah) {
+    return std::to_string(surah) + ':' + std::to_string(ayah);
+}
+
 int main() {
+    pw::threadpool.resize(0);
+
     std::string quran[115][287];
 
     for (unsigned short i = 0; i < 115; ++i) {
@@ -96,8 +104,14 @@ int main() {
             dpp::slashcommand quote_command("quote", "Quote the Holy Qur'an", bot.me.id);
             quote_command.add_option(dpp::command_option(dpp::co_string, "verses", "The verses to quote (e.g. 2:255 or 2:255-256)", true));
             quote_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
-            bot.global_bulk_command_create({quote_command});
+
+            dpp::slashcommand search_command("search", "Search for a pattern in the Holy Qur'an", bot.me.id);
+            search_command.add_option(dpp::command_option(dpp::co_string, "pattern", "The string to look for.", true));
+            search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+
+            bot.global_bulk_command_create({quote_command, search_command});
         }
+        std::cout << "Qur'an Bot is ready for dawah!" << std::endl;
     });
 
     bot.register_command("quote", [&quran, &bot](const dpp::slashcommand_t& event) {
@@ -140,6 +154,41 @@ int main() {
         embed.set_description(text);
         embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
         event.reply(embed);
+    });
+
+    bot.register_command("search", [&quran, &bot](const dpp::slashcommand_t& event) {
+        std::string pattern = std::get<std::string>(event.get_parameter("pattern"));
+        pw::string::trim(pattern);
+        pw::string::to_lower(pattern);
+
+        std::vector<std::pair<std::string, std::string>> matching_verses;
+        for (unsigned short surah = 1; surah <= 114; ++surah) {
+            for (unsigned short ayah = 1; ayah <= 286; ++ayah) {
+                if (quran[surah][ayah] != "⚠️ This verse does not exist. ⚠️") {
+                    size_t match_pos;
+                    if ((match_pos = pw::string::to_lower_copy(quran[surah][ayah]).find(pattern)) != std::string::npos) {
+                        std::string verse = quran[surah][ayah];
+                        verse.insert(match_pos, "**");
+                        verse.insert(match_pos + pattern.size() + 2, "**");
+                        matching_verses.emplace_back("Surah " + surah_name(surah) + " (" + verse_key(surah, ayah) + ')', verse);
+                    }
+                }
+            }
+        }
+
+        if (matching_verses.empty()) {
+            event.reply(dpp::message("No matches found.").set_flags(dpp::m_ephemeral));
+        } else {
+            dpp::embed embed = dpp::embed();
+            embed.set_color(0x009736);
+            embed.set_author("Dr. Mustafa Khattab, The Clear Quran", "https://theclearquran.org/", "https://theclearquran.org/favicon.ico");
+            embed.set_title("Search Results");
+            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+            for (const auto& match : matching_verses) {
+                embed.add_field(match.first, match.second);
+            }
+            event.reply(dpp::message(embed).set_flags(dpp::m_ephemeral));
+        }
     });
 
     bot.start(dpp::st_wait);
