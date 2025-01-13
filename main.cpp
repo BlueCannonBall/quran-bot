@@ -6,7 +6,6 @@
 #include <regex>
 #include <sstream>
 #include <stddef.h>
-#include <stdexcept>
 #include <stdlib.h>
 #include <string>
 #include <utility>
@@ -29,56 +28,50 @@ std::string to_superscript(int number) {
     return ret;
 }
 
-std::string surah_name(int surah) {
-    // clang-format off
-    const static std::string surah_names[] = {
-        "Al-Fatiha", "Al-Baqarah", "Aal-E-Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am",
-        "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim",
-        "Al-Hijr", "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Ta-Ha", "Al-Anbiya", "Al-Hajj",
-        "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-Ankabut",
-        "Ar-Rum", "Luqman", "As-Sajda", "Al-Ahzab", "Saba", "Fatir", "Ya-Sin", "As-Saffat",
-        "Sad", "Az-Zumar", "Ghafir", "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan",
-        "Al-Jathiya", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf", "Adh-Dhariyat",
-        "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman", "Al-Waqia", "Al-Hadid", "Al-Mujadila",
-        "Al-Hashr", "Al-Mumtahina", "As-Saff", "Al-Jumu'a", "Al-Munafiqun", "At-Taghabun",
-        "At-Talaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqa", "Al-Ma'arij", "Nuh",
-        "Al-Jinn", "Al-Muzzammil", "Al-Muddaththir", "Al-Qiyama", "Al-Insan", "Al-Mursalat",
-        "An-Naba", "An-Nazi'at", "Abasa", "At-Takwir", "Al-Infitar", "Al-Mutaffifin", "Al-Inshiqaq",
-        "Al-Buruj", "At-Tariq", "Al-A'la", "Al-Ghashiya", "Al-Fajr", "Al-Balad", "Ash-Shams",
-        "Al-Lail", "Ad-Duhaa", "Ash-Sharh", "At-Tin", "Al-Alaq", "Al-Qadr", "Al-Bayyina",
-        "Az-Zalzala", "Al-Adiyat", "Al-Qari'a", "At-Takathur", "Al-Asr", "Al-Humaza", "Al-Fil",
-        "Quraysh", "Al-Ma'un", "Al-Kawthar", "Al-Kafirun", "An-Nasr", "Al-Masad", "Al-Ikhlas",
-        "Al-Falaq", "An-Nas",
-    };
-    // clang-format on
-
-    if (surah >= 1 && surah <= 114) {
-        return surah_names[surah - 1];
-    } else {
-        throw std::invalid_argument("Invalid surah number");
-    }
-}
-
 std::string verse_key(unsigned short surah, unsigned short ayah) {
     return std::to_string(surah) + ':' + std::to_string(ayah);
 }
 
+std::vector<std::pair<std::string, std::string>> search_quran(const std::string surahs[114], const std::vector<std::string> ayahs[114], std::string pattern, unsigned short& surah, unsigned short& ayah, unsigned short limit = 5) {
+    pw::string::to_lower(pattern);
+
+    std::vector<std::pair<std::string, std::string>> ret;
+    for (; surah <= 114; ++surah) {
+        for (; ayah <= ayahs[surah - 1].size(); ++ayah) {
+            size_t match_pos;
+            if ((match_pos = pw::string::to_lower_copy(ayahs[surah - 1][ayah - 1]).find(pattern)) != std::string::npos) {
+                std::string verse = ayahs[surah - 1][ayah - 1];
+                verse.insert(match_pos, "**");
+                verse.insert(match_pos + pattern.size() + 2, "**");
+                ret.emplace_back("Surah " + surahs[surah - 1] + " (" + verse_key(surah, ayah) + ')', verse);
+
+                if (ret.size() >= limit) {
+                    return ret;
+                }
+            }
+        }
+        ayah = 1;
+    }
+    return ret;
+}
+
 int main() {
+    pn::init();
     pw::threadpool.resize(0);
 
-    std::string quran[115][287];
+    std::pair<unsigned short, std::string> translations[] = {
+        {131, "Dr. Mustafa Khattab, The Clear Quran"},
+        {20, "Saheeh International"},
+        {19, "M. Pickthall"},
+        {22, "A. Yusuf Ali"},
+    };
+    std::string surahs[114];
+    std::vector<std::string> ayahs[2][114];
 
-    for (unsigned short i = 0; i < 115; ++i) {
-        for (unsigned short j = 0; j < 287; ++j) {
-            quran[i][j] = "⚠️ This verse does not exist. ⚠️";
-        }
-    }
-
-    for (unsigned short surah = 1; surah <= 114; ++surah) {
-        std::cout << "Downloading surah " << surah << "..." << std::endl;
-
+    std::cout << "Downloading Qur'an..." << std::endl;
+    {
         pw::HTTPResponse resp;
-        if (pw::fetch("https://api.quran.com/api/v4/verses/by_chapter/" + std::to_string(surah) + "?translations=131&limit=286", resp, {{"Accept", "application/json"}}) == PN_ERROR) {
+        if (pw::fetch("https://api.quran.com/api/v4/chapters", resp, {{"Accept", "application/json"}}) == PN_ERROR) {
             std::cerr << "Error: Request to api.quran.com failed: " << pw::universal_strerror() << std::endl;
             return EXIT_FAILURE;
         } else if (resp.status_code_category() != 200) {
@@ -87,26 +80,51 @@ int main() {
         }
 
         json resp_json = json::parse(resp.body_string());
-        for (const auto& verse : resp_json["verses"].items()) {
-            static std::regex footnote_regex(R"(<sup foot_note=\d+>\d+</sup>)");
-            std::string text = std::regex_replace(verse.value()["translations"][0]["text"].get<std::string>(), footnote_regex, "");
-            quran[surah][verse.value()["verse_number"].get<unsigned short>()] = text;
+        for (const auto& surah : resp_json["chapters"].items()) {
+            surahs[surah.value()["id"].get<unsigned short>() - 1] = surah.value()["name_complex"].get<std::string>();
+            for (unsigned short translation = 0; translation < 4; ++translation) {
+                ayahs[translation][surah.value()["id"].get<unsigned short>() - 1].resize(surah.value()["verses_count"].get<unsigned short>());
+            }
+        }
+    }
+
+    for (unsigned short translation = 0; translation < 4; ++translation) {
+        pw::HTTPResponse resp;
+        if (pw::fetch("https://api.quran.com/api/v4/quran/translations/" + std::to_string(translations[translation].first) + "?fields=chapter_id%2Cverse_number", resp, {{"Accept", "application/json"}}) == PN_ERROR) {
+            std::cerr << "Error: Request to api.quran.com failed: " << pw::universal_strerror() << std::endl;
+            return EXIT_FAILURE;
+        } else if (resp.status_code_category() != 200) {
+            std::cerr << "Error: Request to api.quran.com failed with status code " << resp.status_code << std::endl;
+            return EXIT_FAILURE;
         }
 
-        std::cout << "Downloaded surah " << surah << '!' << std::endl;
+        json resp_json = json::parse(resp.body_string());
+        for (const auto& verse : resp_json["translations"].items()) {
+            static std::regex footnote_regex(R"(<sup foot_note=\d+>\d+</sup>)");
+            std::string text = std::regex_replace(verse.value()["text"].get<std::string>(), footnote_regex, "");
+            ayahs[translation][verse.value()["chapter_id"].get<unsigned short>() - 1][verse.value()["verse_number"].get<unsigned short>() - 1] = text;
+        }
     }
+    std::cout << "Downloaded Qur'an!" << std::endl;
 
     dpp::cluster bot(getenv("QURAN_BOT_TOKEN"));
     bot.on_log(dpp::utility::cout_logger());
 
-    bot.on_ready([&bot](const auto& event) {
+    bot.on_ready([translations, &bot](const auto& event) {
         if (dpp::run_once<struct RegisterBotCommands>()) {
+            dpp::command_option translation_option(dpp::co_integer, "translation", "The translation to use.", false);
+            for (unsigned short translation = 0; translation < 4; ++translation) {
+                translation_option.add_choice(dpp::command_option_choice(translations[translation].second, translation));
+            }
+
             dpp::slashcommand quote_command("quote", "Quote the Holy Qur'an", bot.me.id);
             quote_command.add_option(dpp::command_option(dpp::co_string, "verses", "The verses to quote (e.g. 2:255 or 2:255-256)", true));
+            quote_command.add_option(translation_option);
             quote_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             dpp::slashcommand search_command("search", "Search for a pattern in the Holy Qur'an", bot.me.id);
             search_command.add_option(dpp::command_option(dpp::co_string, "pattern", "The string to look for.", true));
+            search_command.add_option(translation_option);
             search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             bot.global_bulk_command_create({quote_command, search_command});
@@ -114,8 +132,14 @@ int main() {
         std::cout << "Qur'an Bot is ready for dawah!" << std::endl;
     });
 
-    bot.register_command("quote", [&quran, &bot](const dpp::slashcommand_t& event) {
+    bot.register_command("quote", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
         std::istringstream verses(std::get<std::string>(event.get_parameter("verses")));
+        unsigned short translation;
+        try {
+            translation = std::get<long>(event.get_parameter("translation"));
+        } catch (...) {
+            translation = 0;
+        }
 
         unsigned short surah;
         unsigned short first_ayah;
@@ -128,66 +152,118 @@ int main() {
         if (surah > 114) {
             event.reply(dpp::message("Invalid `verses` parameter!").set_flags(dpp::m_ephemeral));
             return;
-        } else if (first_ayah > 286) {
+        } else if (first_ayah > ayahs[translation][surah - 1].size()) {
             event.reply(dpp::message("Invalid `verses` parameter!").set_flags(dpp::m_ephemeral));
             return;
         } else if (verses.get() == '-') {
             unsigned short last_ayah;
             verses >> last_ayah;
-            if (last_ayah < first_ayah || last_ayah > 286) {
+            if (last_ayah < first_ayah || last_ayah > ayahs[translation][surah - 1].size()) {
                 event.reply(dpp::message("Invalid `verses` parameter!").set_flags(dpp::m_ephemeral));
                 return;
             }
 
             for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                text += to_superscript(ayah) + ' ' + quran[surah][ayah];
+                text += to_superscript(ayah) + ' ' + ayahs[translation][surah - 1][ayah - 1];
                 if (ayah != last_ayah) text.push_back(' ');
             }
         } else {
-            text = quran[surah][first_ayah];
+            text = ayahs[translation][surah - 1][first_ayah - 1];
         }
 
-        dpp::embed embed = dpp::embed();
+        dpp::embed embed;
         embed.set_color(0x009736);
-        embed.set_author("Dr. Mustafa Khattab, The Clear Quran", "https://theclearquran.org/", "https://theclearquran.org/favicon.ico");
-        embed.set_title("Surah " + surah_name(surah) + " (" + verses.str() + ')');
+        embed.set_author(translations[translation].second, {}, {});
+        embed.set_title("Surah " + surahs[surah - 1] + " (" + verses.str() + ')');
         embed.set_description(text);
         embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
         event.reply(embed);
     });
 
-    bot.register_command("search", [&quran, &bot](const dpp::slashcommand_t& event) {
-        std::string pattern = std::get<std::string>(event.get_parameter("pattern"));
-        pw::string::trim(pattern);
-        pw::string::to_lower(pattern);
-
-        std::vector<std::pair<std::string, std::string>> matching_verses;
-        for (unsigned short surah = 1; surah <= 114; ++surah) {
-            for (unsigned short ayah = 1; ayah <= 286; ++ayah) {
-                if (quran[surah][ayah] != "⚠️ This verse does not exist. ⚠️") {
-                    size_t match_pos;
-                    if ((match_pos = pw::string::to_lower_copy(quran[surah][ayah]).find(pattern)) != std::string::npos) {
-                        std::string verse = quran[surah][ayah];
-                        verse.insert(match_pos, "**");
-                        verse.insert(match_pos + pattern.size() + 2, "**");
-                        matching_verses.emplace_back("Surah " + surah_name(surah) + " (" + verse_key(surah, ayah) + ')', verse);
-                    }
-                }
-            }
+    bot.register_command("search", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
+        std::string pattern = pw::string::trim_copy(std::get<std::string>(event.get_parameter("pattern")));
+        unsigned short translation;
+        try {
+            translation = std::get<long>(event.get_parameter("translation"));
+        } catch (...) {
+            translation = 0;
         }
+        unsigned short surah = 1;
+        unsigned short ayah = 1;
+        auto matching_verses = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
 
         if (matching_verses.empty()) {
             event.reply(dpp::message("No matches found.").set_flags(dpp::m_ephemeral));
         } else {
-            dpp::embed embed = dpp::embed();
+            dpp::embed embed;
             embed.set_color(0x009736);
-            embed.set_author("Dr. Mustafa Khattab, The Clear Quran", "https://theclearquran.org/", "https://theclearquran.org/favicon.ico");
+            embed.set_author(translations[translation].second, {}, {});
             embed.set_title("Search Results");
             embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
             for (const auto& match : matching_verses) {
                 embed.add_field(match.first, match.second);
             }
-            event.reply(dpp::message(embed).set_flags(dpp::m_ephemeral));
+
+            dpp::message message(embed);
+            dpp::component action_row;
+            dpp::component continue_button;
+            continue_button.set_type(dpp::cot_button);
+            continue_button.set_label("Keep looking");
+            continue_button.set_emoji("🔍");
+            continue_button.set_id(json(
+                {
+                    {"pattern", pattern},
+                    {"translation", translation},
+                    {"surah", surah},
+                    {"ayah", ayah},
+                })
+                    .dump());
+            message.add_component(action_row.add_component(continue_button));
+            message.set_flags(dpp::m_ephemeral);
+
+            event.reply(message);
+        }
+    });
+
+    bot.on_button_click([translations, surahs, ayahs, &bot](const dpp::button_click_t& event) {
+        json data = json::parse(event.custom_id);
+
+        std::string pattern = data["pattern"]; // Already trimmed
+        unsigned short translation = data["translation"];
+        unsigned short surah = data["surah"];
+        unsigned short ayah = data["ayah"].get<unsigned short>() + 1;
+        auto matching_verses = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
+
+        if (matching_verses.empty()) {
+            event.reply(dpp::message("No matches found.").set_flags(dpp::m_ephemeral));
+        } else {
+            dpp::embed embed;
+            embed.set_color(0x009736);
+            embed.set_author(translations[translation].second, {}, {});
+            embed.set_title("Search Results");
+            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+            for (const auto& match : matching_verses) {
+                embed.add_field(match.first, match.second);
+            }
+
+            dpp::message message(embed);
+            dpp::component action_row;
+            dpp::component continue_button;
+            continue_button.set_type(dpp::cot_button);
+            continue_button.set_label("Keep looking");
+            continue_button.set_emoji("🔍");
+            continue_button.set_id(json(
+                {
+                    {"pattern", pattern},
+                    {"translation", translation},
+                    {"surah", surah},
+                    {"ayah", ayah},
+                })
+                    .dump());
+            message.add_component(action_row.add_component(continue_button));
+            message.set_flags(dpp::m_ephemeral);
+
+            event.reply(message);
         }
     });
 
