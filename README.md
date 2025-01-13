@@ -1,8 +1,16 @@
+*O believers! Be mindful of Allah in the way He deserves, and do not die except in ˹a state of full˺ submission ˹to Him˺.*
+
+*And hold firmly together to the rope of Allah and do not be divided. Remember Allah’s favour upon you when you were enemies, then He united your hearts, so you—by His grace—became brothers. And you were at the brink of a fiery pit and He saved you from it. This is how Allah makes His revelations clear to you, so that you may be ˹rightly˺ guided.*
+
+***Let there be a group among you who call ˹others˺ to goodness, encourage what is good, and forbid what is evil—it is they who will be successful.***
+
+— The Holy Qur'an (3:102-104)
+
 # Qur'an Bot
 A Discord bot for quoting and searching the Holy Qur'an.
 
 ## Dependencies
-- D++
+- [D++](https://dpp.dev/)
 - OpenSSL
 
 ## Execution
