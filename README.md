@@ -1,3 +1,5 @@
+![Shahadatyn-Circular](https://github.com/user-attachments/assets/950aec71-2be8-43e4-b86d-eb57fc48f663)
+
 # Qur'an Bot
 A Discord bot for quoting and searching the Holy Qur'an.
 
