@@ -66,7 +66,7 @@ int main() {
         {22, "A. Yusuf Ali"},
     };
     std::string surahs[114];
-    std::vector<std::string> ayahs[2][114];
+    std::vector<std::string> ayahs[4][114];
 
     std::cout << "Downloading Qur'an..." << std::endl;
     {
