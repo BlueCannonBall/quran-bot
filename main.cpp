@@ -32,7 +32,7 @@ std::string verse_key(unsigned short surah, unsigned short ayah) {
     return std::to_string(surah) + ':' + std::to_string(ayah);
 }
 
-std::vector<std::pair<std::string, std::string>> search_quran(const std::string surahs[114], const std::vector<std::string> ayahs[114], std::string pattern, unsigned short& surah, unsigned short& ayah, unsigned short limit = 5) {
+std::vector<std::pair<std::string, std::string>> search_quran(const std::string surahs[114], const std::vector<std::string> ayahs[114], std::string pattern, unsigned short& surah, unsigned short& ayah, unsigned short limit = 8) {
     pw::string::to_lower(pattern);
 
     std::vector<std::pair<std::string, std::string>> ret;
@@ -164,8 +164,13 @@ int main() {
             }
 
             for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                text += to_superscript(ayah) + ' ' + ayahs[translation][surah - 1][ayah - 1];
-                if (ayah != last_ayah) text.push_back(' ');
+                if (surah < 80) {
+                    text += to_superscript(ayah) + ' ' + ayahs[translation][surah - 1][ayah - 1];
+                    if (ayah != last_ayah) text.push_back(' ');
+                } else {
+                    text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
+                    if (ayah != last_ayah) text.push_back('\n');
+                }
             }
         } else {
             text = ayahs[translation][surah - 1][first_ayah - 1];
@@ -205,7 +210,7 @@ int main() {
             }
 
             dpp::message message(embed);
-            if (results.size() == 5 && (surah < 114 || ayah < 6)) {
+            if (results.size() == 8 && (surah < 114 || ayah < 6)) {
                 dpp::component action_row;
                 dpp::component continue_button;
                 continue_button.set_type(dpp::cot_button);
@@ -249,7 +254,7 @@ int main() {
             }
 
             dpp::message message(embed);
-            if (results.size() == 5 && (surah < 114 || ayah < 6)) {
+            if (results.size() == 8 && (surah < 114 || ayah < 6)) {
                 dpp::component action_row;
                 dpp::component continue_button;
                 continue_button.set_type(dpp::cot_button);
