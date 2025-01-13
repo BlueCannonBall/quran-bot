@@ -205,7 +205,7 @@ int main() {
             }
 
             dpp::message message(embed);
-            if (surah != 114 && ayah != 6 && results.size() == 5) {
+            if (results.size() == 5 && (surah < 114 || ayah < 6)) {
                 dpp::component action_row;
                 dpp::component continue_button;
                 continue_button.set_type(dpp::cot_button);
@@ -249,7 +249,7 @@ int main() {
             }
 
             dpp::message message(embed);
-            if (surah != 114 && ayah != 6 && results.size() == 5) {
+            if (results.size() == 5 && (surah < 114 || ayah < 6)) {
                 dpp::component action_row;
                 dpp::component continue_button;
                 continue_button.set_type(dpp::cot_button);
