@@ -190,9 +190,9 @@ int main() {
         }
         unsigned short surah = 1;
         unsigned short ayah = 1;
-        auto matching_verses = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
+        auto results = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
 
-        if (matching_verses.empty()) {
+        if (results.empty()) {
             event.reply(dpp::message("No matches found.").set_flags(dpp::m_ephemeral));
         } else {
             dpp::embed embed;
@@ -200,25 +200,27 @@ int main() {
             embed.set_author(translations[translation].second, {}, {});
             embed.set_title("Search Results");
             embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
-            for (const auto& match : matching_verses) {
-                embed.add_field(match.first, match.second);
+            for (const auto& result : results) {
+                embed.add_field(result.first, result.second);
             }
 
             dpp::message message(embed);
-            dpp::component action_row;
-            dpp::component continue_button;
-            continue_button.set_type(dpp::cot_button);
-            continue_button.set_label("Keep looking");
-            continue_button.set_emoji("🔍");
-            continue_button.set_id(json(
-                {
-                    {"pattern", pattern},
-                    {"translation", translation},
-                    {"surah", surah},
-                    {"ayah", ayah},
-                })
-                    .dump());
-            message.add_component(action_row.add_component(continue_button));
+            if (surah != 114 && ayah != 6 && results.size() == 5) {
+                dpp::component action_row;
+                dpp::component continue_button;
+                continue_button.set_type(dpp::cot_button);
+                continue_button.set_label("Keep looking");
+                continue_button.set_emoji("🔍");
+                continue_button.set_id(json(
+                    {
+                        {"pattern", pattern},
+                        {"translation", translation},
+                        {"surah", surah},
+                        {"ayah", ayah},
+                    })
+                        .dump());
+                message.add_component(action_row.add_component(continue_button));
+            }
             message.set_flags(dpp::m_ephemeral);
 
             event.reply(message);
@@ -232,9 +234,9 @@ int main() {
         unsigned short translation = data["translation"];
         unsigned short surah = data["surah"];
         unsigned short ayah = data["ayah"].get<unsigned short>() + 1;
-        auto matching_verses = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
+        auto results = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
 
-        if (matching_verses.empty()) {
+        if (results.empty()) {
             event.reply(dpp::message("No matches found.").set_flags(dpp::m_ephemeral));
         } else {
             dpp::embed embed;
@@ -242,25 +244,27 @@ int main() {
             embed.set_author(translations[translation].second, {}, {});
             embed.set_title("Search Results");
             embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
-            for (const auto& match : matching_verses) {
-                embed.add_field(match.first, match.second);
+            for (const auto& result : results) {
+                embed.add_field(result.first, result.second);
             }
 
             dpp::message message(embed);
-            dpp::component action_row;
-            dpp::component continue_button;
-            continue_button.set_type(dpp::cot_button);
-            continue_button.set_label("Keep looking");
-            continue_button.set_emoji("🔍");
-            continue_button.set_id(json(
-                {
-                    {"pattern", pattern},
-                    {"translation", translation},
-                    {"surah", surah},
-                    {"ayah", ayah},
-                })
-                    .dump());
-            message.add_component(action_row.add_component(continue_button));
+            if (surah != 114 && ayah != 6 && results.size() == 5) {
+                dpp::component action_row;
+                dpp::component continue_button;
+                continue_button.set_type(dpp::cot_button);
+                continue_button.set_label("Keep looking");
+                continue_button.set_emoji("🔍");
+                continue_button.set_id(json(
+                    {
+                        {"pattern", pattern},
+                        {"translation", translation},
+                        {"surah", surah},
+                        {"ayah", ayah},
+                    })
+                        .dump());
+                message.add_component(action_row.add_component(continue_button));
+            }
             message.set_flags(dpp::m_ephemeral);
 
             event.reply(message);
