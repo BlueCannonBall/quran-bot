@@ -4,6 +4,8 @@
 
 *Let there be a group among you who call ˹others˺ to goodness, encourage what is good, and forbid what is evil—it is they who will be successful.*
 
+— The Holy Qur'an (3:102-104)
+
 # Qur'an Bot
 A Discord bot for quoting and searching the Holy Qur'an.
 
