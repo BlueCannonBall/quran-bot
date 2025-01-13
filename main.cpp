@@ -1,6 +1,7 @@
 #include "Polyweb/polyweb.hpp"
 #include "Polyweb/string.hpp"
 #include "json.hpp"
+#include <algorithm>
 #include <dpp/dpp.h>
 #include <iostream>
 #include <regex>
@@ -146,40 +147,36 @@ int main() {
         verses >> surah;
         verses.ignore(); // Ignore ':'
         verses >> first_ayah;
+        surah = std::min<unsigned short>(std::max<unsigned short>(surah, 1), 114);
+        first_ayah = std::min<unsigned short>(std::max<unsigned short>(first_ayah, 1), ayahs[translation][surah - 1].size());
 
+        std::string title;
         std::string text;
 
-        if (surah > 114) {
-            event.reply(dpp::message("Invalid `verses` parameter!").set_flags(dpp::m_ephemeral));
-            return;
-        } else if (first_ayah > ayahs[translation][surah - 1].size()) {
-            event.reply(dpp::message("Invalid `verses` parameter!").set_flags(dpp::m_ephemeral));
-            return;
-        } else if (verses.get() == '-') {
+        if (verses.get() == '-') {
             unsigned short last_ayah;
             verses >> last_ayah;
-            if (last_ayah < first_ayah || last_ayah > ayahs[translation][surah - 1].size()) {
-                event.reply(dpp::message("Invalid `verses` parameter!").set_flags(dpp::m_ephemeral));
-                return;
-            }
+            last_ayah = std::min<unsigned short>(std::max<unsigned short>(last_ayah, 1), ayahs[translation][surah - 1].size());
+            title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')';
 
             for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                if (surah < 80) {
-                    text += to_superscript(ayah) + ' ' + ayahs[translation][surah - 1][ayah - 1];
-                    if (ayah != last_ayah) text.push_back(' ');
-                } else {
+                if (surah == 1 || surah >= 80) {
                     text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
                     if (ayah != last_ayah) text.push_back('\n');
+                } else {
+                    text += to_superscript(ayah) + ' ' + ayahs[translation][surah - 1][ayah - 1];
+                    if (ayah != last_ayah) text.push_back(' ');
                 }
             }
         } else {
+            title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + ')';
             text = ayahs[translation][surah - 1][first_ayah - 1];
         }
 
         dpp::embed embed;
         embed.set_color(0x009736);
         embed.set_author(translations[translation].second, {}, {});
-        embed.set_title("Surah " + surahs[surah - 1] + " (" + verses.str() + ')');
+        embed.set_title(title);
         embed.set_description(text);
         embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
         event.reply(embed);
@@ -210,7 +207,7 @@ int main() {
             }
 
             dpp::message message(embed);
-            if (surah < 114 || ayah < 6) {
+            if (surah < 114 || (surah == 114 && ayah < 6)) {
                 dpp::component action_row;
                 dpp::component continue_button;
                 continue_button.set_type(dpp::cot_button);
@@ -237,7 +234,7 @@ int main() {
 
         std::string pattern = data["pattern"]; // Already trimmed
         unsigned short translation = data["translation"];
-        unsigned short surah = data["surah"];
+        unsigned short surah = std::max<unsigned short>(data["surah"].get<unsigned short>(), 1);
         unsigned short ayah = data["ayah"].get<unsigned short>() + 1;
         auto results = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
 
@@ -254,7 +251,7 @@ int main() {
             }
 
             dpp::message message(embed);
-            if (surah < 114 || ayah < 6) {
+            if (surah < 114 || (surah == 114 && ayah < 6)) {
                 dpp::component action_row;
                 dpp::component continue_button;
                 continue_button.set_type(dpp::cot_button);
