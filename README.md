@@ -2,7 +2,7 @@
 A Discord bot for quoting and searching the Holy Qur'an.
 
 ## Dependencies
-- D++
+- [D++](https://dpp.dev/)
 - OpenSSL
 
 ## Execution
