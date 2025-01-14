@@ -1,6 +1,7 @@
 #include "Polyweb/polyweb.hpp"
 #include "Polyweb/string.hpp"
 #include "json.hpp"
+#include "system_instructions.hpp"
 #include <algorithm>
 #include <dpp/dpp.h>
 #include <iostream>
@@ -33,7 +34,7 @@ std::string verse_key(unsigned short surah, unsigned short ayah) {
     return std::to_string(surah) + ':' + std::to_string(ayah);
 }
 
-std::vector<std::pair<std::string, std::string>> search_quran(const std::string surahs[114], const std::vector<std::string> ayahs[114], std::string pattern, unsigned short& surah, unsigned short& ayah, unsigned short limit = 8) {
+std::vector<std::pair<std::string, std::string>> search_quran(const std::string* surahs, const std::vector<std::string>* ayahs, std::string pattern, unsigned short& surah, unsigned short& ayah, unsigned short limit = 8) {
     pw::string::to_lower(pattern);
 
     std::vector<std::pair<std::string, std::string>> ret;
@@ -128,7 +129,11 @@ int main() {
             search_command.add_option(translation_option);
             search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
-            bot.global_bulk_command_create({quote_command, search_command});
+            dpp::slashcommand ask_command("ask", "Ask Qur'an Bot a question about Islam", bot.me.id);
+            ask_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked.", true));
+            ask_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+
+            bot.global_bulk_command_create({quote_command, search_command, ask_command});
         }
         std::cout << "Qur'an Bot is ready for dawah!" << std::endl;
     });
@@ -271,6 +276,44 @@ int main() {
 
             event.reply(message);
         }
+    });
+
+    bot.register_command("ask", [&bot](const dpp::slashcommand_t& event) {
+        event.thinking(false, [&bot, event](const dpp::confirmation_callback_t& callback) {
+            std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
+
+            json req = {
+                {"system_instruction", {{"parts", {{{"text", system_instructions}}}}}},
+                {"contents", {{"parts", {{{"text", query}}}}}},
+                {
+                    "generationConfig",
+                    {
+                        {"maxOutputTokens", 500},
+                    },
+                },
+            };
+
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent");
+            url_info.query_parameters->insert({"key", getenv("GOOGLE_API_KEY")});
+
+            pw::HTTPResponse resp;
+            if (pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}) == PN_ERROR) {
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!").set_flags(dpp::m_ephemeral));
+                return;
+            } else if (resp.status_code_category() != 200) {
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + '!').set_flags(dpp::m_ephemeral));
+                return;
+            }
+
+            json resp_json = json::parse(resp.body_string());
+            dpp::embed embed;
+            embed.set_color(0x009736);
+            embed.set_author(resp_json["modelVersion"].get<std::string>(), {}, {});
+            embed.set_title("AI Response");
+            embed.set_description("__**Question:** " + query + "__\n**Answer:** " + resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
+            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+            event.edit_original_response(embed);
+        });
     });
 
     bot.start(dpp::st_wait);

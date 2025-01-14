@@ -14,14 +14,14 @@ A Discord bot for quoting and searching the Holy Qur'an.
 - OpenSSL
 
 ## Execution
-Compile it with `make`, and run it with `QURAN_BOT_TOKEN` as follows:
+Compile it with `make`, and run it with `QURAN_BOT_TOKEN` and `GOOGLE_API_KEY` as follows:
 ```
 $ make
-$ QURAN_BOT_TOKEN=yourtokenhere ./quran-bot
+$ QURAN_BOT_TOKEN=yourtokenhere GOOGLE_API_KEY=yourkeyhere ./quran-bot
 ```
 
 ## Usage
-The `/quote` command can be used to quote either a single verse or a range of verses, and `/search` searches for strings in the Qur'an.
+The `/quote` command can be used to quote either a single verse or a range of verses, and `/search` searches for strings in the Qur'an. The `/ask` AI uses generative AI to answer questions about Islam.
 
 ## Screenshots
 ![image](https://github.com/user-attachments/assets/d21d7c3e-fe9e-4be7-a009-31136302da19)
