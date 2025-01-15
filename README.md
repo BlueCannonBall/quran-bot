@@ -21,7 +21,7 @@ $ QURAN_BOT_TOKEN=yourtokenhere GOOGLE_API_KEY=yourkeyhere ./quran-bot
 ```
 
 ## Usage
-The `/quote` command can be used to quote either a single verse or a range of verses, and `/search` searches for strings in the Qur'an. The `/ask` AI uses generative AI to answer questions about Islam.
+The `/quote` command can be used to quote either a single verse or a range of verses, and `/search` searches for strings in the Qur'an. The `/ask` command uses generative AI to answer questions about Islam.
 
 ## Screenshots
 ![image](https://github.com/user-attachments/assets/d21d7c3e-fe9e-4be7-a009-31136302da19)
