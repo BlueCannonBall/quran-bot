@@ -165,7 +165,10 @@ int main() {
             title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')';
 
             for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                if (surah == 1 || surah >= 80) {
+                if (surah == 1 ||
+                    (surah >= 50 && surah <= 56) ||
+                    (surah >= 67 && surah <= 77) ||
+                    (surah >= 78 && surah <= 114)) {
                     text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
                     if (ayah != last_ayah) text.push_back('\n');
                 } else {
