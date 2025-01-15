@@ -114,7 +114,7 @@ int main() {
 
     bot.on_ready([translations, &bot](const auto& event) {
         if (dpp::run_once<struct RegisterBotCommands>()) {
-            dpp::command_option translation_option(dpp::co_integer, "translation", "The translation to use.", false);
+            dpp::command_option translation_option(dpp::co_integer, "translation", "The translation to use", false);
             for (unsigned short translation = 0; translation < 4; ++translation) {
                 translation_option.add_choice(dpp::command_option_choice(translations[translation].second, translation));
             }
@@ -125,12 +125,12 @@ int main() {
             quote_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             dpp::slashcommand search_command("search", "Search for a pattern in the Holy Qur'an", bot.me.id);
-            search_command.add_option(dpp::command_option(dpp::co_string, "pattern", "The string to look for.", true));
+            search_command.add_option(dpp::command_option(dpp::co_string, "pattern", "The string to look for", true));
             search_command.add_option(translation_option);
             search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             dpp::slashcommand ask_command("ask", "Ask Qur'an Bot a question about Islam", bot.me.id);
-            ask_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked.", true));
+            ask_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked", true));
             ask_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             bot.global_bulk_command_create({quote_command, search_command, ask_command});
