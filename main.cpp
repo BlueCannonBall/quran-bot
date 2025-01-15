@@ -288,7 +288,7 @@ int main() {
                 {
                     "generationConfig",
                     {
-                        {"maxOutputTokens", 500},
+                        {"maxOutputTokens", 750},
                     },
                 },
             };
