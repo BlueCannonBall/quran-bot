@@ -220,6 +220,7 @@ int main() {
                 dpp::component continue_button;
                 continue_button.set_type(dpp::cot_button);
                 continue_button.set_label("Keep looking");
+                continue_button.set_style(dpp::cos_secondary);
                 continue_button.set_emoji("🔍");
                 continue_button.set_id(json(
                     {
@@ -264,6 +265,7 @@ int main() {
                 dpp::component continue_button;
                 continue_button.set_type(dpp::cot_button);
                 continue_button.set_label("Keep looking");
+                continue_button.set_style(dpp::cos_secondary);
                 continue_button.set_emoji("🔍");
                 continue_button.set_id(json(
                     {
