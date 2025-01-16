@@ -293,14 +293,15 @@ int main() {
     });
 
     bot.register_command("ask", [&bot](const dpp::slashcommand_t& event) {
-        event.thinking(false, [&bot, event](const dpp::confirmation_callback_t& callback) {
+        bool ephemeral;
+        if (std::holds_alternative<bool>(event.get_parameter("ephemeral"))) {
+            ephemeral = std::get<bool>(event.get_parameter("ephemeral"));
+        } else {
+            ephemeral = false;
+        }
+
+        event.thinking(ephemeral, [&bot, event](const dpp::confirmation_callback_t& callback) {
             std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
-            bool ephemeral;
-            if (std::holds_alternative<bool>(event.get_parameter("ephemeral"))) {
-                ephemeral = std::get<bool>(event.get_parameter("ephemeral"));
-            } else {
-                ephemeral = false;
-            }
 
             json req = {
                 {"system_instruction", {{"parts", {{{"text", system_instructions}}}}}},
@@ -326,17 +327,13 @@ int main() {
             }
 
             json resp_json = json::parse(resp.body_string());
-
             dpp::embed embed;
             embed.set_color(0x009736);
             embed.set_author(resp_json["modelVersion"].get<std::string>(), {}, {});
             embed.set_title("AI Response");
             embed.set_description("__**Question:** " + query + "__\n**Answer:** " + resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
             embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
-
-            dpp::message message(embed);
-            if (ephemeral) message.set_flags(dpp::m_ephemeral);
-            event.edit_original_response(message);
+            event.edit_original_response(embed);
         });
     });
 
