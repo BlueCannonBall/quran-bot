@@ -127,10 +127,12 @@ int main() {
             dpp::slashcommand search_command("search", "Search for a pattern in the Holy Qur'an", bot.me.id);
             search_command.add_option(dpp::command_option(dpp::co_string, "pattern", "The string to look for", true));
             search_command.add_option(translation_option);
+            search_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (true by default)", false));
             search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             dpp::slashcommand ask_command("ask", "Ask Qur'an Bot a question about Islam", bot.me.id);
             ask_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked", true));
+            ask_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             ask_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             bot.global_bulk_command_create({quote_command, search_command, ask_command});
@@ -141,9 +143,9 @@ int main() {
     bot.register_command("quote", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
         std::istringstream verses(std::get<std::string>(event.get_parameter("verses")));
         unsigned short translation;
-        try {
+        if (std::holds_alternative<long>(event.get_parameter("translation"))) {
             translation = std::get<long>(event.get_parameter("translation"));
-        } catch (...) {
+        } else {
             translation = 0;
         }
 
@@ -193,10 +195,16 @@ int main() {
     bot.register_command("search", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
         std::string pattern = pw::string::trim_copy(std::get<std::string>(event.get_parameter("pattern")));
         unsigned short translation;
-        try {
+        if (std::holds_alternative<long>(event.get_parameter("translation"))) {
             translation = std::get<long>(event.get_parameter("translation"));
-        } catch (...) {
+        } else {
             translation = 0;
+        }
+        bool ephemeral;
+        if (std::holds_alternative<bool>(event.get_parameter("ephemeral"))) {
+            ephemeral = std::get<bool>(event.get_parameter("ephemeral"));
+        } else {
+            ephemeral = true;
         }
         unsigned short surah = 1;
         unsigned short ayah = 1;
@@ -225,13 +233,14 @@ int main() {
                     {
                         {"pattern", pattern},
                         {"translation", translation},
+                        {"ephemeral", ephemeral},
                         {"surah", surah},
                         {"ayah", ayah},
                     })
                         .dump());
                 message.add_component(action_row.add_component(continue_button));
             }
-            message.set_flags(dpp::m_ephemeral);
+            if (ephemeral) message.set_flags(dpp::m_ephemeral);
 
             event.reply(message);
         }
@@ -242,6 +251,7 @@ int main() {
 
         std::string pattern = data["pattern"]; // Already trimmed
         unsigned short translation = data["translation"];
+        bool ephemeral = data["ephemeral"];
         unsigned short surah = std::max<unsigned short>(data["surah"].get<unsigned short>(), 1);
         unsigned short ayah = data["ayah"].get<unsigned short>() + 1;
         auto results = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
@@ -269,13 +279,14 @@ int main() {
                     {
                         {"pattern", pattern},
                         {"translation", translation},
+                        {"ephemeral", ephemeral},
                         {"surah", surah},
                         {"ayah", ayah},
                     })
                         .dump());
                 message.add_component(action_row.add_component(continue_button));
             }
-            message.set_flags(dpp::m_ephemeral);
+            if (ephemeral) message.set_flags(dpp::m_ephemeral);
 
             event.reply(message);
         }
@@ -284,6 +295,12 @@ int main() {
     bot.register_command("ask", [&bot](const dpp::slashcommand_t& event) {
         event.thinking(false, [&bot, event](const dpp::confirmation_callback_t& callback) {
             std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
+            bool ephemeral;
+            if (std::holds_alternative<bool>(event.get_parameter("ephemeral"))) {
+                ephemeral = std::get<bool>(event.get_parameter("ephemeral"));
+            } else {
+                ephemeral = false;
+            }
 
             json req = {
                 {"system_instruction", {{"parts", {{{"text", system_instructions}}}}}},
@@ -309,13 +326,17 @@ int main() {
             }
 
             json resp_json = json::parse(resp.body_string());
+
             dpp::embed embed;
             embed.set_color(0x009736);
             embed.set_author(resp_json["modelVersion"].get<std::string>(), {}, {});
             embed.set_title("AI Response");
             embed.set_description("__**Question:** " + query + "__\n**Answer:** " + resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
             embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
-            event.edit_original_response(embed);
+
+            dpp::message message(embed);
+            if (ephemeral) message.set_flags(dpp::m_ephemeral);
+            event.edit_original_response(message);
         });
     });
 
