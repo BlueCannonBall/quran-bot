@@ -122,6 +122,7 @@ int main() {
             dpp::slashcommand quote_command("quote", "Quote the Holy Qur'an", bot.me.id);
             quote_command.add_option(dpp::command_option(dpp::co_string, "verses", "The verses to quote (e.g. 2:255 or 2:255-256)", true));
             quote_command.add_option(translation_option);
+            quote_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             quote_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             dpp::slashcommand search_command("search", "Search for a pattern in the Holy Qur'an", bot.me.id);
@@ -147,6 +148,12 @@ int main() {
             translation = std::get<long>(event.get_parameter("translation"));
         } else {
             translation = 0;
+        }
+        bool ephemeral;
+        if (std::holds_alternative<bool>(event.get_parameter("ephemeral"))) {
+            ephemeral = std::get<bool>(event.get_parameter("ephemeral"));
+        } else {
+            ephemeral = false;
         }
 
         unsigned short surah;
@@ -189,7 +196,11 @@ int main() {
         embed.set_title(title);
         embed.set_description(text);
         embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
-        event.reply(embed);
+        if (ephemeral) {
+            event.reply(dpp::message(embed).set_flags(dpp::m_ephemeral));
+        } else {
+            event.reply(embed);
+        }
     });
 
     bot.register_command("search", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
