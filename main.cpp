@@ -455,7 +455,7 @@ int main() {
                     unsigned short first_ayah = clamp_ayah(surah, result.value()["first_ayah"]);
 
                     json::const_iterator last_ayah_it;
-                    if ((last_ayah_it = result.value().find("last_ayah")) != result.value().end() && !last_ayah_it->is_null()) {
+                    if ((last_ayah_it = result.value().find("last_ayah")) != result.value().end() && !last_ayah_it->is_null() && *last_ayah_it != first_ayah) {
                         unsigned short last_ayah = clamp_ayah(surah, *last_ayah_it);
 
                         std::string text;
