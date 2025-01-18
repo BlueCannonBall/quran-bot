@@ -448,7 +448,7 @@ int main() {
             } else {
                 dpp::embed embed;
                 embed.set_color(0x009736);
-                embed.set_author(translations[translation].second, {}, {});
+                embed.set_author(translations[translation].second + " (powered by " + resp_json["modelVersion"].get<std::string>() + ')', {}, {});
                 embed.set_title("Search Results");
                 for (const auto& result : results_json.items()) {
                     unsigned short surah = clamp_surah(result.value()["surah"]);
