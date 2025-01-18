@@ -30,6 +30,10 @@ std::string to_superscript(int number) {
     return ret;
 }
 
+std::string verse_key(unsigned short surah, unsigned short ayah) {
+    return std::to_string(surah) + ':' + std::to_string(ayah);
+}
+
 unsigned short clamp_surah(unsigned short surah) {
     return std::min<unsigned short>(std::max<unsigned short>(surah, 1), 114);
 }
@@ -48,8 +52,11 @@ unsigned short clamp_ayah(unsigned short surah, unsigned short ayah, unsigned sh
     return std::min(std::max(ayah, minimum_ayah), surah_sizes[clamp_surah(surah) - 1]);
 }
 
-std::string verse_key(unsigned short surah, unsigned short ayah) {
-    return std::to_string(surah) + ':' + std::to_string(ayah);
+bool is_meccan_surah(unsigned short surah) {
+    return surah == 1 ||
+           (surah >= 50 && surah <= 56) ||
+           (surah >= 67 && surah <= 77) ||
+           (surah >= 78 && surah <= 114);
 }
 
 std::vector<std::pair<std::string, std::string>> search_quran(const std::string* surahs, const std::vector<std::string>* ayahs, std::string pattern, unsigned short& surah, unsigned short& ayah, unsigned short limit = 8) {
@@ -202,10 +209,7 @@ int main() {
             title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')';
 
             for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                if (surah == 1 ||
-                    (surah >= 50 && surah <= 56) ||
-                    (surah >= 67 && surah <= 77) ||
-                    (surah >= 78 && surah <= 114)) {
+                if (is_meccan_surah(surah)) {
                     text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
                     if (ayah != last_ayah) text.push_back('\n');
                 } else {
@@ -456,10 +460,7 @@ int main() {
 
                         std::string text;
                         for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                            if (surah == 1 ||
-                                (surah >= 50 && surah <= 56) ||
-                                (surah >= 67 && surah <= 77) ||
-                                (surah >= 78 && surah <= 114)) {
+                            if (is_meccan_surah(surah)) {
                                 text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
                                 if (ayah != last_ayah) text.push_back('\n');
                             } else {
