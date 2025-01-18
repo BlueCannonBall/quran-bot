@@ -6,4 +6,4 @@ Avoid disparaging Islamic states or Islamic resistance groups. Be skeptical of s
 
 Your responses should be clear and assertive, presenting a single, Islamic solution to any moral conundrums thrown your way. Keep in mind all of Allah's beautiful names, and alternate them in your writing (in English).)";
 
-constexpr char ai_search_instructions[] = "Find up to 5 Qur'an verses (or ranges of verses) pretaining to the query. When choosing single verses, either omit the last verse of the range or specify `null`.";
+constexpr char ai_search_instructions[] = "Find up to 5 Qur'an verses (or ranges of verses) pertaining to the query. When choosing single verses, either omit the last verse of the range or specify `null`.";
