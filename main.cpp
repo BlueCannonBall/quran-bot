@@ -30,6 +30,24 @@ std::string to_superscript(int number) {
     return ret;
 }
 
+unsigned short clamp_surah(unsigned short surah) {
+    return std::min<unsigned short>(std::max<unsigned short>(surah, 1), 114);
+}
+
+unsigned short clamp_ayah(unsigned short surah, unsigned short ayah, unsigned short minimum_ayah = 1) {
+    // clang-format off
+    unsigned short surah_sizes[114] = {
+        7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135,
+        112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85,
+        54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13,
+        14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42,
+        29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11,
+        11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
+    };
+    // clang-format on
+    return std::min(std::max(ayah, minimum_ayah), surah_sizes[clamp_surah(surah) - 1]);
+}
+
 std::string verse_key(unsigned short surah, unsigned short ayah) {
     return std::to_string(surah) + ':' + std::to_string(ayah);
 }
@@ -82,10 +100,11 @@ int main() {
         }
 
         json resp_json = json::parse(resp.body_string());
-        for (const auto& surah : resp_json["chapters"].items()) {
-            surahs[surah.value()["id"].get<unsigned short>() - 1] = surah.value()["name_complex"].get<std::string>();
+        for (const auto& chapter : resp_json["chapters"].items()) {
+            unsigned short surah = clamp_surah(chapter.value()["id"]);
+            surahs[surah - 1] = chapter.value()["name_complex"];
             for (unsigned short translation = 0; translation < 4; ++translation) {
-                ayahs[translation][surah.value()["id"].get<unsigned short>() - 1].resize(surah.value()["verses_count"].get<unsigned short>());
+                ayahs[translation][surah - 1].resize(std::min<unsigned short>(chapter.value()["verses_count"].get<unsigned short>(), 286));
             }
         }
     }
@@ -103,8 +122,11 @@ int main() {
         json resp_json = json::parse(resp.body_string());
         for (const auto& verse : resp_json["translations"].items()) {
             static std::regex footnote_regex(R"(<sup foot_note=\d+>\d+</sup>)");
+
+            unsigned short surah = clamp_surah(verse.value()["chapter_id"]);
+            unsigned short ayah = clamp_ayah(surah, verse.value()["verse_number"]);
             std::string text = std::regex_replace(verse.value()["text"].get<std::string>(), footnote_regex, "");
-            ayahs[translation][verse.value()["chapter_id"].get<unsigned short>() - 1][verse.value()["verse_number"].get<unsigned short>() - 1] = text;
+            ayahs[translation][surah - 1][ayah - 1] = text;
         }
     }
     std::cout << "Downloaded Qur'an!" << std::endl;
@@ -136,9 +158,15 @@ int main() {
             ask_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             ask_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
-            bot.global_bulk_command_create({quote_command, search_command, ask_command});
+            dpp::slashcommand ai_search_command("aisearch", "Search for something in the Holy Qur'an using AI", bot.me.id);
+            ai_search_command.add_option(dpp::command_option(dpp::co_string, "query", "Search description", true));
+            ai_search_command.add_option(translation_option);
+            ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (true by default)", false));
+            ai_search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+
+            bot.global_bulk_command_create({quote_command, search_command, ask_command, ai_search_command});
         }
-        std::cout << "Qur'an Bot is ready for dawah!" << std::endl;
+        std::cout << "Qur'an Bot is ready for da'wah!" << std::endl;
     });
 
     bot.register_command("quote", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
@@ -161,8 +189,8 @@ int main() {
         verses >> surah;
         verses.ignore(); // Ignore ':'
         verses >> first_ayah;
-        surah = std::min<unsigned short>(std::max<unsigned short>(surah, 1), 114);
-        first_ayah = std::min<unsigned short>(std::max<unsigned short>(first_ayah, 1), ayahs[translation][surah - 1].size());
+        surah = clamp_surah(surah);
+        first_ayah = clamp_ayah(surah, first_ayah);
 
         std::string title;
         std::string text;
@@ -170,7 +198,7 @@ int main() {
         if (verses.get() == '-') {
             unsigned short last_ayah;
             verses >> last_ayah;
-            last_ayah = std::min<unsigned short>(std::max<unsigned short>(last_ayah, 1), ayahs[translation][surah - 1].size());
+            last_ayah = clamp_ayah(surah, last_ayah, first_ayah);
             title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')';
 
             for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
@@ -228,10 +256,10 @@ int main() {
             embed.set_color(0x009736);
             embed.set_author(translations[translation].second, {}, {});
             embed.set_title("Search Results");
-            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
             for (const auto& result : results) {
                 embed.add_field(result.first, result.second);
             }
+            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
 
             dpp::message message(embed);
             if (surah < 114 || (surah == 114 && ayah < 6)) {
@@ -274,10 +302,10 @@ int main() {
             embed.set_color(0x009736);
             embed.set_author(translations[translation].second, {}, {});
             embed.set_title("Search Results");
-            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
             for (const auto& result : results) {
                 embed.add_field(result.first, result.second);
             }
+            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
 
             dpp::message message(embed);
             if (surah < 114 || (surah == 114 && ayah < 6)) {
@@ -315,7 +343,7 @@ int main() {
             std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
 
             json req = {
-                {"system_instruction", {{"parts", {{{"text", system_instructions}}}}}},
+                {"system_instruction", {{"parts", {{{"text", ask_instructions}}}}}},
                 {"contents", {{"parts", {{{"text", query}}}}}},
                 {
                     "generationConfig",
@@ -345,6 +373,108 @@ int main() {
             embed.set_description("__**Question:** " + query + "__\n**Answer:** " + resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
             embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
             event.edit_original_response(embed);
+        });
+    });
+
+    bot.register_command("aisearch", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
+        bool ephemeral;
+        if (std::holds_alternative<bool>(event.get_parameter("ephemeral"))) {
+            ephemeral = std::get<bool>(event.get_parameter("ephemeral"));
+        } else {
+            ephemeral = true;
+        }
+
+        event.thinking(ephemeral, [translations, surahs, ayahs, &bot, event](const dpp::confirmation_callback_t& callback) {
+            std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
+            unsigned short translation;
+            if (std::holds_alternative<long>(event.get_parameter("translation"))) {
+                translation = std::get<long>(event.get_parameter("translation"));
+            } else {
+                translation = 0;
+            }
+
+            json req = {
+                {"system_instruction", {{"parts", {{{"text", ai_search_instructions}}}}}},
+                {"contents", {{"parts", {{{"text", query}}}}}},
+                {
+                    "generationConfig",
+                    {
+                        {"response_mime_type", "application/json"},
+                        {
+                            "response_schema",
+                            {
+                                {"type", "ARRAY"},
+                                {
+                                    "items",
+                                    {
+                                        {"type", "OBJECT"},
+                                        {
+                                            "properties",
+                                            {
+                                                {"surah", {{"type", "INTEGER"}}},
+                                                {"first_ayah", {{"type", "INTEGER"}}},
+                                                {"last_ayah", {{"type", "INTEGER"}, {"nullable", true}}},
+                                            },
+                                        },
+                                        {"required", {"surah", "first_ayah"}},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent");
+            url_info.query_parameters->insert({"key", getenv("GOOGLE_API_KEY")});
+
+            pw::HTTPResponse resp;
+            if (pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}) == PN_ERROR) {
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!").set_flags(dpp::m_ephemeral));
+                return;
+            } else if (resp.status_code_category() != 200) {
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + '!').set_flags(dpp::m_ephemeral));
+                return;
+            }
+
+            json resp_json = json::parse(resp.body_string());
+            json results_json = json::parse(resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
+            if (results_json.empty()) {
+                event.edit_original_response(dpp::message("No matches found."));
+            } else {
+                dpp::embed embed;
+                embed.set_color(0x009736);
+                embed.set_author(translations[translation].second, {}, {});
+                embed.set_title("Search Results");
+                for (const auto& result : results_json.items()) {
+                    unsigned short surah = clamp_surah(result.value()["surah"]);
+                    unsigned short first_ayah = clamp_ayah(surah, result.value()["first_ayah"]);
+
+                    json::const_iterator last_ayah_it;
+                    if ((last_ayah_it = result.value().find("last_ayah")) != result.value().end() && !last_ayah_it->is_null()) {
+                        unsigned short last_ayah = clamp_ayah(surah, *last_ayah_it);
+
+                        std::string text;
+                        for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
+                            if (surah == 1 ||
+                                (surah >= 50 && surah <= 56) ||
+                                (surah >= 67 && surah <= 77) ||
+                                (surah >= 78 && surah <= 114)) {
+                                text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
+                                if (ayah != last_ayah) text.push_back('\n');
+                            } else {
+                                text += to_superscript(ayah) + ' ' + ayahs[translation][surah - 1][ayah - 1];
+                                if (ayah != last_ayah) text.push_back(' ');
+                            }
+                        }
+                        embed.add_field("Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')', text);
+                    } else {
+                        embed.add_field("Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + ')', ayahs[translation][surah - 1][first_ayah - 1]);
+                    }
+                }
+                embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+                event.edit_original_response(embed);
+            }
         });
     });
 
