@@ -228,11 +228,10 @@ int main() {
         embed.set_title(title);
         embed.set_description(text);
         embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
-        if (ephemeral) {
-            event.reply(dpp::message(embed).set_flags(dpp::m_ephemeral));
-        } else {
-            event.reply(embed);
-        }
+
+        dpp::message message(embed);
+        if (ephemeral) message.set_flags(dpp::m_ephemeral);
+        event.reply(message);
     });
 
     bot.register_command("search", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
@@ -254,7 +253,9 @@ int main() {
         auto results = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
 
         if (results.empty()) {
-            event.reply(dpp::message("No matches found.").set_flags(dpp::m_ephemeral));
+            dpp::message message("No matches found.");
+            if (ephemeral) message.set_flags(dpp::m_ephemeral);
+            event.reply(message);
         } else {
             dpp::embed embed;
             embed.set_color(0x009736);
@@ -284,7 +285,6 @@ int main() {
                 message.add_component(action_row.add_component(continue_button));
             }
             if (ephemeral) message.set_flags(dpp::m_ephemeral);
-
             event.reply(message);
         }
     });
@@ -300,7 +300,9 @@ int main() {
         auto results = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
 
         if (results.empty()) {
-            event.reply(dpp::message("No matches found.").set_flags(dpp::m_ephemeral));
+            dpp::message message("No matches found.");
+            if (ephemeral) message.set_flags(dpp::m_ephemeral);
+            event.reply(message);
         } else {
             dpp::embed embed;
             embed.set_color(0x009736);
@@ -330,7 +332,6 @@ int main() {
                 message.add_component(action_row.add_component(continue_button));
             }
             if (ephemeral) message.set_flags(dpp::m_ephemeral);
-
             event.reply(message);
         }
     });
@@ -362,10 +363,10 @@ int main() {
 
             pw::HTTPResponse resp;
             if (pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}) == PN_ERROR) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!").set_flags(dpp::m_ephemeral));
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
                 return;
             } else if (resp.status_code_category() != 200) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + '!').set_flags(dpp::m_ephemeral));
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + '!'));
                 return;
             }
 
@@ -434,10 +435,10 @@ int main() {
 
             pw::HTTPResponse resp;
             if (pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}) == PN_ERROR) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!").set_flags(dpp::m_ephemeral));
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
                 return;
             } else if (resp.status_code_category() != 200) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + '!').set_flags(dpp::m_ephemeral));
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + '!'));
                 return;
             }
 
