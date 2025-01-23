@@ -52,7 +52,7 @@ unsigned short clamp_ayah(unsigned short surah, unsigned short ayah, unsigned sh
     return std::min(std::max(ayah, minimum_ayah), surah_sizes[clamp_surah(surah) - 1]);
 }
 
-bool is_meccan_surah(unsigned short surah) {
+bool is_poetic_surah(unsigned short surah) {
     return surah == 1 ||
            (surah >= 50 && surah <= 56) ||
            (surah >= 67 && surah <= 77) ||
@@ -209,7 +209,7 @@ int main() {
             title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')';
 
             for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                if (is_meccan_surah(surah)) {
+                if (is_poetic_surah(surah)) {
                     text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
                     if (ayah != last_ayah) text.push_back('\n');
                 } else {
@@ -462,7 +462,7 @@ int main() {
                         (last_ayah = clamp_ayah(surah, *last_ayah_it)) != first_ayah) {
                         std::string text;
                         for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
-                            if (is_meccan_surah(surah)) {
+                            if (is_poetic_surah(surah)) {
                                 text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
                                 if (ayah != last_ayah) text.push_back('\n');
                             } else {
