@@ -65,8 +65,7 @@ std::vector<std::pair<std::string, std::string>> search_quran(const std::string*
     std::vector<std::pair<std::string, std::string>> ret;
     for (; surah <= 114; ++surah) {
         for (; ayah <= ayahs[surah - 1].size(); ++ayah) {
-            size_t match_pos;
-            if ((match_pos = pw::string::to_lower_copy(ayahs[surah - 1][ayah - 1]).find(pattern)) != std::string::npos) {
+            if (size_t match_pos = pw::string::to_lower_copy(ayahs[surah - 1][ayah - 1]).find(pattern); match_pos != std::string::npos) {
                 std::string verse = ayahs[surah - 1][ayah - 1];
                 verse.insert(match_pos, "**");
                 verse.insert(match_pos + pattern.size() + 2, "**");
@@ -430,7 +429,7 @@ int main() {
                 },
             };
 
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent");
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent");
             url_info.query_parameters->insert({"key", getenv("GOOGLE_API_KEY")});
 
             pw::HTTPResponse resp;
@@ -455,7 +454,7 @@ int main() {
                     unsigned short surah = clamp_surah(result.value()["surah"]);
                     unsigned short first_ayah = clamp_ayah(surah, result.value()["first_ayah"]);
 
-                    json::const_iterator last_ayah_it;
+                    json::iterator last_ayah_it;
                     unsigned short last_ayah;
                     if ((last_ayah_it = result.value().find("last_ayah")) != result.value().end() &&
                         !last_ayah_it->is_null() &&
