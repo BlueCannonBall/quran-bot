@@ -14,10 +14,10 @@ A Discord bot for quoting and searching the Holy Qur'an.
 - OpenSSL
 
 ## Execution
-Compile it with `make`, and run it with `QURAN_BOT_TOKEN` and `GOOGLE_API_KEY` as follows:
+Compile it with `make`, and run it with `QURAN_DISCORD_TOKEN`, `QURAN_CLIENT_ID`, `QURAN_CLIENT_SECRET`, and `QURAN_GOOGLE_API_KEY` as follows:
 ```
 $ make
-$ QURAN_BOT_TOKEN=yourtokenhere GOOGLE_API_KEY=yourkeyhere ./quran-bot
+$ QURAN_DISCORD_TOKEN=yourtokenhere QURAN_CLIENT_ID=yourclientidhere QURAN_CLIENT_SECRET=yourclientsecrethere QURAN_GOOGLE_API_KEY=yourkeyhere ./quran-bot
 ```
 
 ## Usage

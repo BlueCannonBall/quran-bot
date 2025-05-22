@@ -3,6 +3,7 @@
 #include "json.hpp"
 #include "system_instructions.hpp"
 #include <algorithm>
+#include <assert.h>
 #include <dpp/dpp.h>
 #include <iostream>
 #include <regex>
@@ -13,6 +14,12 @@
 #include <utility>
 
 using nlohmann::json;
+
+std::string getenv_string(const std::string& var) {
+    char* ret = getenv(var.c_str());
+    assert(ret);
+    return ret;
+}
 
 std::string to_superscript(int number) {
     const static std::string superscripts[] = {"\u2070", "\u00B9", "\u00B2", "\u00B3", "\u2074", "\u2075", "\u2076", "\u2077", "\u2078", "\u2079"};
@@ -94,14 +101,36 @@ int main() {
     std::string surahs[114];
     std::vector<std::string> ayahs[4][114];
 
+    std::string access_token;
+    std::string client_id = getenv_string("QURAN_CLIENT_ID");
+    std::cout << "Requesting Qur'an API access token..." << std::endl;
+    {
+        pw::HTTPResponse resp;
+        if (pw::fetch("POST",
+                "https://" + getenv_string("QURAN_CLIENT_ID") + ':' + getenv_string("QURAN_CLIENT_SECRET") + "@oauth2.quran.foundation/oauth2/token",
+                resp,
+                "grant_type=client_credentials&scope=content",
+                {{"Content-Type", "application/x-www-form-urlencoded"}}) == PN_ERROR) {
+            std::cerr << "Error: Request to oauth2.quran.foundation failed: " << pw::universal_strerror() << std::endl;
+            return EXIT_FAILURE;
+        } else if (resp.status_code_category() != 200) {
+            std::cerr << "Error: Request to oauth2.quran.foundation failed with status code " << resp.status_code << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        json resp_json = json::parse(resp.body_string());
+        access_token = resp_json["access_token"];
+    }
+    std::cout << "Got Qur'an API access token: " << access_token << std::endl;
+
     std::cout << "Downloading Qur'an..." << std::endl;
     {
         pw::HTTPResponse resp;
-        if (pw::fetch("https://api.quran.com/api/v4/chapters", resp, {{"Accept", "application/json"}}) == PN_ERROR) {
-            std::cerr << "Error: Request to api.quran.com failed: " << pw::universal_strerror() << std::endl;
+        if (pw::fetch("https://apis.quran.foundation/content/api/v4/chapters", resp, {{"Accept", "application/json"}, {"x-auth-token", access_token}, {"x-client-id", client_id}}) == PN_ERROR) {
+            std::cerr << "Error: Request to apis.quran.foundation failed: " << pw::universal_strerror() << std::endl;
             return EXIT_FAILURE;
         } else if (resp.status_code_category() != 200) {
-            std::cerr << "Error: Request to api.quran.com failed with status code " << resp.status_code << std::endl;
+            std::cerr << "Error: Request to apis.quran.foundation failed with status code " << resp.status_code << std::endl;
             return EXIT_FAILURE;
         }
 
@@ -117,11 +146,18 @@ int main() {
 
     for (unsigned short translation = 0; translation < 4; ++translation) {
         pw::HTTPResponse resp;
-        if (pw::fetch("https://api.quran.com/api/v4/quran/translations/" + std::to_string(translations[translation].first) + "?fields=chapter_id%2Cverse_number", resp, {{"Accept", "application/json"}}) == PN_ERROR) {
-            std::cerr << "Error: Request to api.quran.com failed: " << pw::universal_strerror() << std::endl;
+        if (pw::fetch(
+                "https://apis.quran.foundation/content/api/v4/quran/translations/" + std::to_string(translations[translation].first) + "?fields=chapter_id%2Cverse_number",
+                resp,
+                {
+                    {"Accept", "application/json"},
+                    {"x-auth-token", access_token},
+                    {"x-client-id", client_id},
+                }) == PN_ERROR) {
+            std::cerr << "Error: Request to apis.quran.foundation failed: " << pw::universal_strerror() << std::endl;
             return EXIT_FAILURE;
         } else if (resp.status_code_category() != 200) {
-            std::cerr << "Error: Request to api.quran.com failed with status code " << resp.status_code << std::endl;
+            std::cerr << "Error: Request to apis.quran.foundation failed with status code " << resp.status_code << std::endl;
             return EXIT_FAILURE;
         }
 
@@ -137,7 +173,7 @@ int main() {
     }
     std::cout << "Downloaded Qur'an!" << std::endl;
 
-    dpp::cluster bot(getenv("QURAN_BOT_TOKEN"));
+    dpp::cluster bot(getenv_string("QURAN_DISCORD_TOKEN"));
     bot.on_log(dpp::utility::cout_logger());
 
     bot.on_ready([translations, &bot](const auto& event) {
@@ -358,7 +394,7 @@ int main() {
             };
 
             pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent");
-            url_info.query_parameters->insert({"key", getenv("GOOGLE_API_KEY")});
+            url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
 
             pw::HTTPResponse resp;
             if (pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}) == PN_ERROR) {
@@ -430,7 +466,7 @@ int main() {
             };
 
             pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent");
-            url_info.query_parameters->insert({"key", getenv("GOOGLE_API_KEY")});
+            url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
 
             pw::HTTPResponse resp;
             if (pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}) == PN_ERROR) {
