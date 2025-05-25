@@ -97,9 +97,10 @@ int main() {
         {20, "Saheeh International"},
         {19, "M. Pickthall"},
         {22, "A. Yusuf Ali"},
+        {85, "M.A.S. Abdel Haleem"},
     };
     std::string surahs[114];
-    std::vector<std::string> ayahs[4][114];
+    std::vector<std::string> ayahs[5][114];
 
     std::string access_token;
     std::string client_id = getenv_string("QURAN_CLIENT_ID");
@@ -138,13 +139,13 @@ int main() {
         for (const auto& chapter : resp_json["chapters"].items()) {
             unsigned short surah = clamp_surah(chapter.value()["id"]);
             surahs[surah - 1] = chapter.value()["name_complex"];
-            for (unsigned short translation = 0; translation < 4; ++translation) {
+            for (unsigned short translation = 0; translation < 5; ++translation) {
                 ayahs[translation][surah - 1].resize(std::min<unsigned short>(chapter.value()["verses_count"].get<unsigned short>(), 286));
             }
         }
     }
 
-    for (unsigned short translation = 0; translation < 4; ++translation) {
+    for (unsigned short translation = 0; translation < 5; ++translation) {
         pw::HTTPResponse resp;
         if (pw::fetch(
                 "https://apis.quran.foundation/content/api/v4/quran/translations/" + std::to_string(translations[translation].first) + "?fields=chapter_id%2Cverse_number",
@@ -179,7 +180,7 @@ int main() {
     bot.on_ready([translations, &bot](const auto& event) {
         if (dpp::run_once<struct RegisterBotCommands>()) {
             dpp::command_option translation_option(dpp::co_integer, "translation", "The translation to use", false);
-            for (unsigned short translation = 0; translation < 4; ++translation) {
+            for (unsigned short translation = 0; translation < 5; ++translation) {
                 translation_option.add_choice(dpp::command_option_choice(translations[translation].second, translation));
             }
 
