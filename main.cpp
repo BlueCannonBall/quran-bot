@@ -395,7 +395,7 @@ int main() {
                 },
             };
 
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent");
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
             url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
 
             pw::HTTPResponse resp;
@@ -467,7 +467,7 @@ int main() {
                 },
             };
 
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent");
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
             url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
 
             pw::HTTPResponse resp;
