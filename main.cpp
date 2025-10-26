@@ -273,7 +273,6 @@ int main() {
 
         dpp::component add_prev_verse_button;
         add_prev_verse_button.set_type(dpp::cot_button);
-        add_prev_verse_button.set_label("Add verse");
         add_prev_verse_button.set_emoji("⏪");
         add_prev_verse_button.set_style(dpp::cos_secondary);
         add_prev_verse_button.set_id(json(
@@ -289,7 +288,6 @@ int main() {
 
         dpp::component add_verse_button;
         add_verse_button.set_type(dpp::cot_button);
-        add_verse_button.set_label("Add verse");
         add_verse_button.set_emoji("⏩");
         add_verse_button.set_style(dpp::cos_secondary);
         add_verse_button.set_id(json(
@@ -398,7 +396,6 @@ int main() {
 
             dpp::component add_prev_verse_button;
             add_prev_verse_button.set_type(dpp::cot_button);
-            add_prev_verse_button.set_label("Add verse");
             add_prev_verse_button.set_emoji("⏪");
             add_prev_verse_button.set_style(dpp::cos_secondary);
             add_prev_verse_button.set_id(json(
@@ -414,7 +411,6 @@ int main() {
 
             dpp::component add_verse_button;
             add_verse_button.set_type(dpp::cot_button);
-            add_verse_button.set_label("Add verse");
             add_verse_button.set_emoji("⏩");
             add_verse_button.set_style(dpp::cos_secondary);
             add_verse_button.set_id(json(
@@ -430,7 +426,7 @@ int main() {
 
             message.add_component(action_row);
 
-            event.reply(message);
+            event.reply(dpp::ir_update_message, message);
         } else if (data["type"] == "add_prev_verse") {
             unsigned short surah = clamp_surah(data["surah"]);
             unsigned short first_ayah = clamp_ayah(surah, data["first_ayah"].get<unsigned short>() - 1);
@@ -461,7 +457,6 @@ int main() {
 
             dpp::component add_prev_verse_button;
             add_prev_verse_button.set_type(dpp::cot_button);
-            add_prev_verse_button.set_label("Add verse");
             add_prev_verse_button.set_emoji("⏪");
             add_prev_verse_button.set_style(dpp::cos_secondary);
             add_prev_verse_button.set_id(json(
@@ -477,7 +472,6 @@ int main() {
 
             dpp::component add_verse_button;
             add_verse_button.set_type(dpp::cot_button);
-            add_verse_button.set_label("Add verse");
             add_verse_button.set_emoji("⏩");
             add_verse_button.set_style(dpp::cos_secondary);
             add_verse_button.set_id(json(
@@ -493,7 +487,7 @@ int main() {
 
             message.add_component(action_row);
 
-            event.reply(message);
+            event.reply(dpp::ir_update_message, message);
         } else if (data["type"] == "continue") {
             std::string pattern = data["pattern"]; // Already trimmed
             bool ephemeral = data["ephemeral"];
