@@ -239,8 +239,8 @@ int main() {
         std::string title;
         std::string text;
 
+        unsigned short last_ayah = first_ayah;
         if (verses.get() == '-') {
-            unsigned short last_ayah;
             verses >> last_ayah;
             last_ayah = clamp_ayah(surah, last_ayah, first_ayah);
             title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')';
@@ -268,6 +268,43 @@ int main() {
 
         dpp::message message(embed);
         if (ephemeral) message.set_flags(dpp::m_ephemeral);
+
+        dpp::component action_row;
+
+        dpp::component add_prev_verse_button;
+        add_prev_verse_button.set_type(dpp::cot_button);
+        add_prev_verse_button.set_label("Add verse");
+        add_prev_verse_button.set_emoji("⏪");
+        add_prev_verse_button.set_style(dpp::cos_secondary);
+        add_prev_verse_button.set_id(json(
+            {
+                {"type", "add_prev_verse"},
+                {"translation", translation},
+                {"surah", surah},
+                {"first_ayah", first_ayah},
+                {"last_ayah", last_ayah},
+            })
+                .dump());
+        action_row.add_component(add_prev_verse_button);
+
+        dpp::component add_verse_button;
+        add_verse_button.set_type(dpp::cot_button);
+        add_verse_button.set_label("Add verse");
+        add_verse_button.set_emoji("⏩");
+        add_verse_button.set_style(dpp::cos_secondary);
+        add_verse_button.set_id(json(
+            {
+                {"type", "add_verse"},
+                {"translation", translation},
+                {"surah", surah},
+                {"first_ayah", first_ayah},
+                {"last_ayah", last_ayah},
+            })
+                .dump());
+        action_row.add_component(add_verse_button);
+
+        message.add_component(action_row);
+
         event.reply(message);
     });
 
@@ -312,6 +349,7 @@ int main() {
                 continue_button.set_emoji("🔍");
                 continue_button.set_id(json(
                     {
+                        {"type", "continue"},
                         {"pattern", pattern},
                         {"translation", translation},
                         {"ephemeral", ephemeral},
@@ -328,48 +366,176 @@ int main() {
 
     bot.on_button_click([translations, surahs, ayahs, &bot](const dpp::button_click_t& event) {
         json data = json::parse(event.custom_id);
-
-        std::string pattern = data["pattern"]; // Already trimmed
         unsigned short translation = data["translation"];
-        bool ephemeral = data["ephemeral"];
-        unsigned short surah = std::max<unsigned short>(data["surah"].get<unsigned short>(), 1);
-        unsigned short ayah = data["ayah"].get<unsigned short>() + 1;
-        auto results = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
 
-        if (results.empty()) {
-            dpp::message message("No matches found.");
-            if (ephemeral) message.set_flags(dpp::m_ephemeral);
-            event.reply(message);
-        } else {
+        if (data["type"] == "add_verse") {
+            unsigned short surah = clamp_surah(data["surah"]);
+            unsigned short first_ayah = clamp_ayah(surah, data["first_ayah"]);
+            unsigned short last_ayah = clamp_ayah(surah, data["last_ayah"].get<unsigned short>() + 1, first_ayah);
+
+            std::string title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')';
+            std::string text;
+            for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
+                if (is_poetic_surah(surah)) {
+                    text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
+                    if (ayah != last_ayah) text.push_back('\n');
+                } else {
+                    text += to_superscript(ayah) + ' ' + ayahs[translation][surah - 1][ayah - 1];
+                    if (ayah != last_ayah) text.push_back(' ');
+                }
+            }
+
             dpp::embed embed;
             embed.set_color(0x009736);
             embed.set_author(translations[translation].second, {}, {});
-            embed.set_title("Search Results");
-            for (const auto& result : results) {
-                embed.add_field(result.first, result.second);
-            }
+            embed.set_title(title);
+            embed.set_description(text);
             embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
 
             dpp::message message(embed);
-            if (surah < 114 || (surah == 114 && ayah < 6)) {
-                dpp::component action_row;
-                dpp::component continue_button;
-                continue_button.set_type(dpp::cot_button);
-                continue_button.set_label("Keep looking");
-                continue_button.set_emoji("🔍");
-                continue_button.set_id(json(
-                    {
-                        {"pattern", pattern},
-                        {"translation", translation},
-                        {"ephemeral", ephemeral},
-                        {"surah", surah},
-                        {"ayah", ayah},
-                    })
-                        .dump());
-                message.add_component(action_row.add_component(continue_button));
-            }
-            if (ephemeral) message.set_flags(dpp::m_ephemeral);
+
+            dpp::component action_row;
+
+            dpp::component add_prev_verse_button;
+            add_prev_verse_button.set_type(dpp::cot_button);
+            add_prev_verse_button.set_label("Add verse");
+            add_prev_verse_button.set_emoji("⏪");
+            add_prev_verse_button.set_style(dpp::cos_secondary);
+            add_prev_verse_button.set_id(json(
+                {
+                    {"type", "add_prev_verse"},
+                    {"translation", translation},
+                    {"surah", surah},
+                    {"first_ayah", first_ayah},
+                    {"last_ayah", last_ayah},
+                })
+                    .dump());
+            action_row.add_component(add_prev_verse_button);
+
+            dpp::component add_verse_button;
+            add_verse_button.set_type(dpp::cot_button);
+            add_verse_button.set_label("Add verse");
+            add_verse_button.set_emoji("⏩");
+            add_verse_button.set_style(dpp::cos_secondary);
+            add_verse_button.set_id(json(
+                {
+                    {"type", "add_verse"},
+                    {"translation", translation},
+                    {"surah", surah},
+                    {"first_ayah", first_ayah},
+                    {"last_ayah", last_ayah},
+                })
+                    .dump());
+            action_row.add_component(add_verse_button);
+
+            message.add_component(action_row);
+
             event.reply(message);
+        } else if (data["type"] == "add_prev_verse") {
+            unsigned short surah = clamp_surah(data["surah"]);
+            unsigned short first_ayah = clamp_ayah(surah, data["first_ayah"].get<unsigned short>() - 1);
+            unsigned short last_ayah = clamp_ayah(surah, data["last_ayah"], first_ayah);
+
+            std::string title = "Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + '-' + std::to_string(last_ayah) + ')';
+            std::string text;
+            for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {
+                if (is_poetic_surah(surah)) {
+                    text += std::to_string(ayah) + ". " + ayahs[translation][surah - 1][ayah - 1];
+                    if (ayah != last_ayah) text.push_back('\n');
+                } else {
+                    text += to_superscript(ayah) + ' ' + ayahs[translation][surah - 1][ayah - 1];
+                    if (ayah != last_ayah) text.push_back(' ');
+                }
+            }
+
+            dpp::embed embed;
+            embed.set_color(0x009736);
+            embed.set_author(translations[translation].second, {}, {});
+            embed.set_title(title);
+            embed.set_description(text);
+            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+
+            dpp::message message(embed);
+
+            dpp::component action_row;
+
+            dpp::component add_prev_verse_button;
+            add_prev_verse_button.set_type(dpp::cot_button);
+            add_prev_verse_button.set_label("Add verse");
+            add_prev_verse_button.set_emoji("⏪");
+            add_prev_verse_button.set_style(dpp::cos_secondary);
+            add_prev_verse_button.set_id(json(
+                {
+                    {"type", "add_prev_verse"},
+                    {"translation", translation},
+                    {"surah", surah},
+                    {"first_ayah", first_ayah},
+                    {"last_ayah", last_ayah},
+                })
+                    .dump());
+            action_row.add_component(add_prev_verse_button);
+
+            dpp::component add_verse_button;
+            add_verse_button.set_type(dpp::cot_button);
+            add_verse_button.set_label("Add verse");
+            add_verse_button.set_emoji("⏩");
+            add_verse_button.set_style(dpp::cos_secondary);
+            add_verse_button.set_id(json(
+                {
+                    {"type", "add_verse"},
+                    {"translation", translation},
+                    {"surah", surah},
+                    {"first_ayah", first_ayah},
+                    {"last_ayah", last_ayah},
+                })
+                    .dump());
+            action_row.add_component(add_verse_button);
+
+            message.add_component(action_row);
+
+            event.reply(message);
+        } else if (data["type"] == "continue") {
+            std::string pattern = data["pattern"]; // Already trimmed
+            bool ephemeral = data["ephemeral"];
+            unsigned short surah = std::max<unsigned short>(data["surah"].get<unsigned short>(), 1);
+            unsigned short ayah = data["ayah"].get<unsigned short>() + 1;
+            auto results = search_quran(surahs, ayahs[translation], pattern, surah, ayah);
+
+            if (results.empty()) {
+                dpp::message message("No matches found.");
+                if (ephemeral) message.set_flags(dpp::m_ephemeral);
+                event.reply(message);
+            } else {
+                dpp::embed embed;
+                embed.set_color(0x009736);
+                embed.set_author(translations[translation].second, {}, {});
+                embed.set_title("Search Results");
+                for (const auto& result : results) {
+                    embed.add_field(result.first, result.second);
+                }
+                embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+
+                dpp::message message(embed);
+                if (surah < 114 || (surah == 114 && ayah < 6)) {
+                    dpp::component action_row;
+                    dpp::component continue_button;
+                    continue_button.set_type(dpp::cot_button);
+                    continue_button.set_label("Keep looking");
+                    continue_button.set_emoji("🔍");
+                    continue_button.set_id(json(
+                        {
+                            {"pattern", pattern},
+                            {"translation", translation},
+                            {"ephemeral", ephemeral},
+                            {"surah", surah},
+                            {"ayah", ayah},
+                        })
+                            .dump());
+                    message.add_component(action_row.add_component(continue_button));
+                }
+                if (ephemeral) message.set_flags(dpp::m_ephemeral);
+                event.reply(message);
+            }
         }
     });
 
