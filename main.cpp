@@ -266,9 +266,6 @@ int main() {
         embed.set_description(text);
         embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
 
-        dpp::message message(embed);
-        if (ephemeral) message.set_flags(dpp::m_ephemeral);
-
         dpp::component action_row;
 
         dpp::component add_prev_verse_button;
@@ -299,10 +296,10 @@ int main() {
                 {"last_ayah", last_ayah},
             })
                 .dump());
-        action_row.add_component(add_verse_button);
 
-        message.add_component(action_row);
-
+        dpp::message message(embed);
+        message.add_component(action_row.add_component(add_verse_button));
+        if (ephemeral) message.set_flags(dpp::m_ephemeral);
         event.reply(message);
     });
 
