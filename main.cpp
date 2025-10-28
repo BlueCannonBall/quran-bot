@@ -544,12 +544,6 @@ int main() {
             json req = {
                 {"system_instruction", {{"parts", {{{"text", ask_instructions}}}}}},
                 {"contents", {{"parts", {{{"text", query}}}}}},
-                {
-                    "generationConfig",
-                    {
-                        {"maxOutputTokens", 750},
-                    },
-                },
             };
 
             pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent");
