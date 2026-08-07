@@ -3,6 +3,7 @@
 #include "json.hpp"
 #include "system_instructions.hpp"
 #include <algorithm>
+#include <cstdio>
 #include <assert.h>
 #include <dpp/dpp.h>
 #include <iostream>
@@ -544,9 +545,10 @@ int main() {
             json req = {
                 {"system_instruction", {{"parts", {{{"text", ask_instructions}}}}}},
                 {"contents", {{"parts", {{{"text", query}}}}}},
+                {"tools", {{{"googleSearch", json::object()}}}},
             };
 
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent");
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent");
             url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
 
             pw::HTTPResponse resp;
@@ -554,17 +556,26 @@ int main() {
                 event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
                 return;
             } else if (resp.status_code_category() != 200) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + '!'));
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + ":\n```\n" + resp.body_string() + "\n```"));
                 return;
             }
 
             json resp_json = json::parse(resp.body_string());
+            double total_cost = 0.0;
+            if (resp_json.contains("usageMetadata")) {
+                total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
+            }
+            char cost_str[64] = "";
+            if (total_cost > 0.0) {
+                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", total_cost);
+            }
+
             dpp::embed embed;
             embed.set_color(0x009736);
             embed.set_author(resp_json["modelVersion"].get<std::string>(), {}, {});
             embed.set_title("AI Response");
             embed.set_description("__**Question:** " + query + "__\n**Answer:** " + resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
-            embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+            embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
             event.edit_original_response(embed);
         });
     });
@@ -618,7 +629,7 @@ int main() {
                 },
             };
 
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent");
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent");
             url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
 
             pw::HTTPResponse resp;
@@ -626,11 +637,20 @@ int main() {
                 event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
                 return;
             } else if (resp.status_code_category() != 200) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + '!'));
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + ":\n```\n" + resp.body_string() + "\n```"));
                 return;
             }
 
             json resp_json = json::parse(resp.body_string());
+            double total_cost = 0.0;
+            if (resp_json.contains("usageMetadata")) {
+                total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
+            }
+            char cost_str[64] = "";
+            if (total_cost > 0.0) {
+                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", total_cost);
+            }
+
             json results_json = json::parse(resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
             if (results_json.empty()) {
                 event.edit_original_response(dpp::message("No matches found."));
@@ -663,7 +683,7 @@ int main() {
                         embed.add_field("Surah " + surahs[surah - 1] + " (" + verse_key(surah, first_ayah) + ')', ayahs[translation][surah - 1][first_ayah - 1]);
                     }
                 }
-                embed.set_footer("Qur'an Bot by BlueCannonBall", bot.me.get_avatar_url());
+                embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
                 event.edit_original_response(embed);
             }
         });
