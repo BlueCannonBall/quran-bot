@@ -16,7 +16,13 @@
 
 #define TRANSLATION_COUNT 4
 
+#include <map>
+#include <mutex>
+
 using nlohmann::json;
+
+std::map<dpp::snowflake, json> conversation_cache;
+std::mutex conversation_mutex;
 
 std::string getenv_string(const std::string& var) {
     char* ret = getenv(var.c_str());
@@ -92,8 +98,7 @@ std::vector<std::pair<std::string, std::string>> search_quran(const std::string*
 }
 
 int main() {
-    pn::init();
-    pw::threadpool.resize(0);
+    pw::thread_pool.resize(0);
 
     std::pair<unsigned short, std::string> translations[] = {
         {85, "M.A.S. Abdel Haleem"},
@@ -108,13 +113,13 @@ int main() {
     std::string client_id = getenv_string("QURAN_CLIENT_ID");
     std::cout << "Requesting Qur'an API access token..." << std::endl;
     {
-        pw::HTTPResponse resp;
-        if (pw::fetch("POST",
+        pw::Response resp;
+        if (auto status = pw::fetch("POST",
                 "https://" + getenv_string("QURAN_CLIENT_ID") + ':' + getenv_string("QURAN_CLIENT_SECRET") + "@oauth2.quran.foundation/oauth2/token",
                 resp,
                 "grant_type=client_credentials&scope=content",
-                {{"Content-Type", "application/x-www-form-urlencoded"}}) == PN_ERROR) {
-            std::cerr << "Error: Request to oauth2.quran.foundation failed: " << pw::universal_strerror() << std::endl;
+                {{"Content-Type", "application/x-www-form-urlencoded"}}); !status) {
+            std::cerr << "Error: Request to oauth2.quran.foundation failed: " << status.error().message() << std::endl;
             return EXIT_FAILURE;
         } else if (resp.status_code_category() != 200) {
             std::cerr << "Error: Request to oauth2.quran.foundation failed with status code " << resp.status_code << std::endl;
@@ -128,9 +133,9 @@ int main() {
 
     std::cout << "Downloading Qur'an..." << std::endl;
     {
-        pw::HTTPResponse resp;
-        if (pw::fetch("https://apis.quran.foundation/content/api/v4/chapters", resp, {{"Accept", "application/json"}, {"x-auth-token", access_token}, {"x-client-id", client_id}}) == PN_ERROR) {
-            std::cerr << "Error: Request to apis.quran.foundation failed: " << pw::universal_strerror() << std::endl;
+        pw::Response resp;
+        if (auto status = pw::fetch("https://apis.quran.foundation/content/api/v4/chapters", resp, {{"Accept", "application/json"}, {"x-auth-token", access_token}, {"x-client-id", client_id}}); !status) {
+            std::cerr << "Error: Request to apis.quran.foundation failed: " << status.error().message() << std::endl;
             return EXIT_FAILURE;
         } else if (resp.status_code_category() != 200) {
             std::cerr << "Error: Request to apis.quran.foundation failed with status code " << resp.status_code << std::endl;
@@ -148,16 +153,16 @@ int main() {
     }
 
     for (unsigned short translation = 0; translation < TRANSLATION_COUNT; ++translation) {
-        pw::HTTPResponse resp;
-        if (pw::fetch(
+        pw::Response resp;
+        if (auto status = pw::fetch(
                 "https://apis.quran.foundation/content/api/v4/quran/translations/" + std::to_string(translations[translation].first) + "?fields=chapter_id%2Cverse_number",
                 resp,
                 {
                     {"Accept", "application/json"},
                     {"x-auth-token", access_token},
                     {"x-client-id", client_id},
-                }) == PN_ERROR) {
-            std::cerr << "Error: Request to apis.quran.foundation failed: " << pw::universal_strerror() << std::endl;
+                }); !status) {
+            std::cerr << "Error: Request to apis.quran.foundation failed: " << status.error().message() << std::endl;
             return EXIT_FAILURE;
         } else if (resp.status_code_category() != 200) {
             std::cerr << "Error: Request to apis.quran.foundation failed with status code " << resp.status_code << std::endl;
@@ -201,15 +206,23 @@ int main() {
             dpp::slashcommand ask_command("ask", "Ask Qur'an Bot a question about Islam", bot.me.id);
             ask_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked", true));
             ask_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
+            ask_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
             ask_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
             dpp::slashcommand ai_search_command("aisearch", "Search for something in the Holy Qur'an using AI", bot.me.id);
             ai_search_command.add_option(dpp::command_option(dpp::co_string, "query", "Search description", true));
             ai_search_command.add_option(translation_option);
             ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (true by default)", false));
+            ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
             ai_search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
 
-            bot.global_bulk_command_create({quote_command, search_command, ask_command, ai_search_command});
+            dpp::slashcommand reply_command("reply", "Continue your conversation with Qur'an Bot", bot.me.id);
+            reply_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked", true));
+            reply_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
+            reply_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
+            reply_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+
+            bot.global_bulk_command_create({quote_command, search_command, ask_command, reply_command, ai_search_command});
         }
         std::cout << "Qur'an Bot is ready for da'wah!" << std::endl;
     });
@@ -538,21 +551,26 @@ int main() {
         } else {
             ephemeral = false;
         }
+        bool fast = false;
+        if (std::holds_alternative<bool>(event.get_parameter("fast"))) {
+            fast = std::get<bool>(event.get_parameter("fast"));
+        }
 
-        event.thinking(ephemeral, [&bot, event](const dpp::confirmation_callback_t& callback) {
+        event.thinking(ephemeral, [&bot, event, fast](const dpp::confirmation_callback_t& callback) {
             std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
 
             json req = {
                 {"system_instruction", {{"parts", {{{"text", ask_instructions}}}}}},
-                {"contents", {{"parts", {{{"text", query}}}}}},
+                {"contents", {{{"role", "user"}, {"parts", {{{"text", query}}}}}}},
                 {"tools", {{{"googleSearch", json::object()}}}},
             };
 
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent");
+            std::string model_name = fast ? "gemini-3.5-flash" : "gemini-3.1-pro-preview";
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/" + model_name + ":generateContent");
             url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
 
-            pw::HTTPResponse resp;
-            if (pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}) == PN_ERROR) {
+            pw::Response resp;
+            if (auto status = pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}); !status) {
                 event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
                 return;
             } else if (resp.status_code_category() != 200) {
@@ -563,7 +581,11 @@ int main() {
             json resp_json = json::parse(resp.body_string());
             double total_cost = 0.0;
             if (resp_json.contains("usageMetadata")) {
-                total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
+                if (fast) {
+                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.0000015 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000009;
+                } else {
+                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
+                }
             }
             char cost_str[64] = "";
             if (total_cost > 0.0) {
@@ -574,7 +596,97 @@ int main() {
             embed.set_color(0x009736);
             embed.set_author(resp_json["modelVersion"].get<std::string>(), {}, {});
             embed.set_title("AI Response");
-            embed.set_description("__**Question:** " + query + "__\n**Answer:** " + resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
+            std::string answer = resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>();
+            {
+                std::lock_guard<std::mutex> lock(conversation_mutex);
+                conversation_cache[event.command.usr.id] = {
+                    {{"role", "user"}, {"parts", {{{"text", query}}}}},
+                    {{"role", "model"}, {"parts", {{{"text", answer}}}}}
+                };
+            }
+            std::string display_query = query;
+            if (display_query.length() > 200) {
+                display_query = display_query.substr(0, 197) + "...";
+            }
+            embed.set_description("__**Question:** " + display_query + "__\n**Answer:** " + answer);
+            embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
+            event.edit_original_response(embed);
+        });
+    });
+
+    bot.register_command("reply", [&bot](const dpp::slashcommand_t& event) {
+        bool ephemeral;
+        if (std::holds_alternative<bool>(event.get_parameter("ephemeral"))) {
+            ephemeral = std::get<bool>(event.get_parameter("ephemeral"));
+        } else {
+            ephemeral = false;
+        }
+        bool fast = false;
+        if (std::holds_alternative<bool>(event.get_parameter("fast"))) {
+            fast = std::get<bool>(event.get_parameter("fast"));
+        }
+
+        event.thinking(ephemeral, [&bot, event, fast](const dpp::confirmation_callback_t& callback) {
+            std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
+            json contents = json::array();
+            {
+                std::lock_guard<std::mutex> lock(conversation_mutex);
+                if (conversation_cache.find(event.command.usr.id) != conversation_cache.end()) {
+                    contents = conversation_cache[event.command.usr.id];
+                }
+            }
+            contents.push_back({{"role", "user"}, {"parts", {{{"text", query}}}}});
+
+            json req = {
+                {"system_instruction", {{"parts", {{{"text", ask_instructions}}}}}},
+                {"contents", contents},
+                {"tools", {{{"googleSearch", json::object()}}}},
+            };
+
+            std::string model_name = fast ? "gemini-3.5-flash" : "gemini-3.1-pro-preview";
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/" + model_name + ":generateContent");
+            url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
+
+            pw::Response resp;
+            if (auto status = pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}); !status) {
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
+                return;
+            } else if (resp.status_code_category() != 200) {
+                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + ":\n```\n" + resp.body_string() + "\n```"));
+                return;
+            }
+
+            json resp_json = json::parse(resp.body_string());
+            double total_cost = 0.0;
+            if (resp_json.contains("usageMetadata")) {
+                if (fast) {
+                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.0000015 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000009;
+                } else {
+                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
+                }
+            }
+            char cost_str[64] = "";
+            if (total_cost > 0.0) {
+                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", total_cost);
+            }
+
+            dpp::embed embed;
+            embed.set_color(0x009736);
+            embed.set_author(resp_json["modelVersion"].get<std::string>(), {}, {});
+            embed.set_title("AI Response");
+            std::string answer = resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>();
+            {
+                std::lock_guard<std::mutex> lock(conversation_mutex);
+                auto& history = conversation_cache[event.command.usr.id];
+                if (history.empty()) history = contents;
+                else history.push_back({{"role", "user"}, {"parts", {{{"text", query}}}}});
+                history.push_back({{"role", "model"}, {"parts", {{{"text", answer}}}}});
+            }
+            std::string display_query = query;
+            if (display_query.length() > 200) {
+                display_query = display_query.substr(0, 197) + "...";
+            }
+            embed.set_description("__**Question:** " + display_query + "__\n**Answer:** " + answer);
             embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
             event.edit_original_response(embed);
         });
@@ -587,8 +699,12 @@ int main() {
         } else {
             ephemeral = true;
         }
+        bool fast = false;
+        if (std::holds_alternative<bool>(event.get_parameter("fast"))) {
+            fast = std::get<bool>(event.get_parameter("fast"));
+        }
 
-        event.thinking(ephemeral, [translations, surahs, ayahs, &bot, event](const dpp::confirmation_callback_t& callback) {
+        event.thinking(ephemeral, [translations, surahs, ayahs, &bot, event, fast](const dpp::confirmation_callback_t& callback) {
             std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
             unsigned short translation;
             if (std::holds_alternative<long>(event.get_parameter("translation"))) {
@@ -629,11 +745,12 @@ int main() {
                 },
             };
 
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent");
+            std::string model_name = fast ? "gemini-3.5-flash" : "gemini-3.1-pro-preview";
+            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/" + model_name + ":generateContent");
             url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
 
-            pw::HTTPResponse resp;
-            if (pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}) == PN_ERROR) {
+            pw::Response resp;
+            if (auto status = pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}); !status) {
                 event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
                 return;
             } else if (resp.status_code_category() != 200) {
@@ -644,7 +761,11 @@ int main() {
             json resp_json = json::parse(resp.body_string());
             double total_cost = 0.0;
             if (resp_json.contains("usageMetadata")) {
-                total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
+                if (fast) {
+                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.0000015 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000009;
+                } else {
+                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
+                }
             }
             char cost_str[64] = "";
             if (total_cost > 0.0) {

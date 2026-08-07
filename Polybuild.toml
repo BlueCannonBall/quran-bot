@@ -4,5 +4,5 @@ source = [".", "Polyweb", "Polyweb/Polynet"]
 artifact = "obj"
 
 [options]
-compilation-flags = "-Wall -std=c++17 -O3"
+compilation-flags = "-Wall -std=c++23 -O3"
 libraries = ["dpp", "ssl", "crypto"]
