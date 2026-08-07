@@ -1,6 +1,7 @@
 #include "Polyweb/polyweb.hpp"
 #include "Polyweb/string.hpp"
 #include "json.hpp"
+#include "gemini.hpp"
 #include "system_instructions.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -565,38 +566,22 @@ int main() {
                 {"tools", {{{"googleSearch", json::object()}}}},
             };
 
-            std::string model_name = fast ? "gemini-3.5-flash" : "gemini-3.1-pro-preview";
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/" + model_name + ":generateContent");
-            url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
-
-            pw::Response resp;
-            if (auto status = pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}); !status) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
-                return;
-            } else if (resp.status_code_category() != 200) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + ":\n```\n" + resp.body_string() + "\n```"));
+            auto result = generate_content(req, fast, getenv_string("QURAN_GOOGLE_API_KEY"));
+            if (!result) {
+                event.edit_original_response(dpp::message(result.error()));
                 return;
             }
 
-            json resp_json = json::parse(resp.body_string());
-            double total_cost = 0.0;
-            if (resp_json.contains("usageMetadata")) {
-                if (fast) {
-                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.0000015 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000009;
-                } else {
-                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
-                }
-            }
             char cost_str[64] = "";
-            if (total_cost > 0.0) {
-                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", total_cost);
+            if (result->cost > 0.0) {
+                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", result->cost);
             }
 
             dpp::embed embed;
             embed.set_color(0x009736);
-            embed.set_author(resp_json["modelVersion"].get<std::string>(), {}, {});
+            embed.set_author(result->model_version, {}, {});
             embed.set_title("AI Response");
-            std::string answer = resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>();
+            std::string answer = result->text;
             {
                 std::lock_guard<std::mutex> lock(conversation_mutex);
                 conversation_cache[event.command.usr.id] = {
@@ -643,38 +628,22 @@ int main() {
                 {"tools", {{{"googleSearch", json::object()}}}},
             };
 
-            std::string model_name = fast ? "gemini-3.5-flash" : "gemini-3.1-pro-preview";
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/" + model_name + ":generateContent");
-            url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
-
-            pw::Response resp;
-            if (auto status = pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}); !status) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
-                return;
-            } else if (resp.status_code_category() != 200) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + ":\n```\n" + resp.body_string() + "\n```"));
+            auto result = generate_content(req, fast, getenv_string("QURAN_GOOGLE_API_KEY"));
+            if (!result) {
+                event.edit_original_response(dpp::message(result.error()));
                 return;
             }
 
-            json resp_json = json::parse(resp.body_string());
-            double total_cost = 0.0;
-            if (resp_json.contains("usageMetadata")) {
-                if (fast) {
-                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.0000015 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000009;
-                } else {
-                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
-                }
-            }
             char cost_str[64] = "";
-            if (total_cost > 0.0) {
-                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", total_cost);
+            if (result->cost > 0.0) {
+                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", result->cost);
             }
 
             dpp::embed embed;
             embed.set_color(0x009736);
-            embed.set_author(resp_json["modelVersion"].get<std::string>(), {}, {});
+            embed.set_author(result->model_version, {}, {});
             embed.set_title("AI Response");
-            std::string answer = resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>();
+            std::string answer = result->text;
             {
                 std::lock_guard<std::mutex> lock(conversation_mutex);
                 auto& history = conversation_cache[event.command.usr.id];
@@ -745,41 +714,25 @@ int main() {
                 },
             };
 
-            std::string model_name = fast ? "gemini-3.5-flash" : "gemini-3.1-pro-preview";
-            pw::URLInfo url_info("https://generativelanguage.googleapis.com/v1beta/models/" + model_name + ":generateContent");
-            url_info.query_parameters->insert({"key", getenv_string("QURAN_GOOGLE_API_KEY")});
-
-            pw::Response resp;
-            if (auto status = pw::fetch("POST", url_info.build(), resp, req.dump(), {{"Content-Type", "application/json"}}); !status) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed!"));
-                return;
-            } else if (resp.status_code_category() != 200) {
-                event.edit_original_response(dpp::message("Request to `generativelanguage.googleapis.com` failed with status code " + std::to_string(resp.status_code) + ":\n```\n" + resp.body_string() + "\n```"));
+            auto result = generate_content(req, fast, getenv_string("QURAN_GOOGLE_API_KEY"));
+            if (!result) {
+                event.edit_original_response(dpp::message(result.error()));
                 return;
             }
 
-            json resp_json = json::parse(resp.body_string());
-            double total_cost = 0.0;
-            if (resp_json.contains("usageMetadata")) {
-                if (fast) {
-                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.0000015 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000009;
-                } else {
-                    total_cost = resp_json["usageMetadata"].value("promptTokenCount", 0) * 0.000002 + resp_json["usageMetadata"].value("candidatesTokenCount", 0) * 0.000012;
-                }
-            }
             char cost_str[64] = "";
-            if (total_cost > 0.0) {
-                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", total_cost);
+            if (result->cost > 0.0) {
+                snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", result->cost);
             }
 
-            json results_json = json::parse(resp_json["candidates"][0]["content"]["parts"][0]["text"].get<std::string>());
+            json results_json = json::parse(result->text);
             if (results_json.empty()) {
                 event.edit_original_response(dpp::message("No matches found."));
             } else {
                 dpp::embed embed;
                 embed.set_color(0x009736);
                 embed.set_author(translations[translation].second, {}, {});
-                embed.set_title("Search Results (Powered by " + resp_json["modelVersion"].get<std::string>() + ')');
+                embed.set_title("Search Results (Powered by " + result->model_version + ')');
                 for (const auto& result : results_json.items()) {
                     unsigned short surah = clamp_surah(result.value()["surah"]);
                     unsigned short first_ayah = clamp_ayah(surah, result.value()["first_ayah"]);
