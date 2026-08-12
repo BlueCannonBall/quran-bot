@@ -99,7 +99,7 @@ namespace {
         return config;
     }
 
-    std::vector<SearchResult> brave_search(const std::string& query, const std::string& api_key, size_t max_results) {
+    SearchResults brave_search(const std::string& query, const std::string& api_key, size_t max_results) {
         pw::URLInfo url_info("https://api.search.brave.com/res/v1/web/search");
         url_info.query_parameters->insert({"q", query});
         url_info.query_parameters->insert({"count", std::to_string(max_results)});
@@ -114,7 +114,7 @@ namespace {
                 },
                 search_config());
             !status || resp.status_code_category() != 200) {
-            return {};
+            return {.unavailable = true};
         }
 
         std::vector<SearchResult> results;
@@ -130,12 +130,89 @@ namespace {
                 });
             }
         } catch (const nlohmann::json::exception&) {
-            return {};
+            return {.unavailable = true};
         }
-        return results;
+        return {std::move(results)};
     }
 
-    std::vector<SearchResult> mojeek_search(const std::string& query, size_t max_results) {
+    // A self hosted SearXNG, which needs "json" listed under formats: in settings.yml
+    SearchResults searxng_search(const std::string& query, const std::string& base_url, size_t max_results) {
+        std::string url = base_url;
+        while (!url.empty() && url.back() == '/') {
+            url.pop_back();
+        }
+
+        pw::URLInfo url_info(url + "/search");
+        url_info.query_parameters->insert({"q", query});
+        url_info.query_parameters->insert({"format", "json"});
+
+        pw::Response resp;
+        if (auto status = pw::fetch("GET",
+                url_info.build(),
+                resp,
+                pw::Headers {{"Accept", "application/json"}},
+                search_config());
+            !status || resp.status_code_category() != 200) {
+            return {.unavailable = true};
+        }
+
+        std::vector<SearchResult> results;
+        try {
+            nlohmann::json resp_json = nlohmann::json::parse(resp.body_string());
+            if (!resp_json.contains("results")) return {};
+            for (const auto& result : resp_json["results"]) {
+                if (results.size() >= max_results) break;
+                results.push_back({
+                    clean(result.value("title", ""), 150),
+                    result.value("url", ""),
+                    clean(result.value("content", "")),
+                });
+            }
+        } catch (const nlohmann::json::exception&) {
+            return {.unavailable = true};
+        }
+        return {std::move(results)};
+    }
+
+    SearchResults serper_search(const std::string& query, const std::string& api_key, size_t max_results) {
+        nlohmann::json req = {
+            {"q", query},
+            {"num", max_results},
+        };
+
+        pw::Response resp;
+        if (auto status = pw::fetch("POST",
+                "https://google.serper.dev/search",
+                resp,
+                req.dump(),
+                pw::Headers {
+                    {"Content-Type", "application/json"},
+                    {"X-API-KEY", api_key},
+                },
+                search_config());
+            !status || resp.status_code_category() != 200) {
+            return {.unavailable = true};
+        }
+
+        std::vector<SearchResult> results;
+        try {
+            nlohmann::json resp_json = nlohmann::json::parse(resp.body_string());
+            if (!resp_json.contains("organic")) return {};
+            for (const auto& result : resp_json["organic"]) {
+                if (results.size() >= max_results) break;
+                results.push_back({
+                    clean(result.value("title", ""), 150),
+                    result.value("link", ""),
+                    clean(result.value("snippet", "")),
+                });
+            }
+        } catch (const nlohmann::json::exception&) {
+            return {.unavailable = true};
+        }
+        return {std::move(results)};
+    }
+
+    SearchResults mojeek_search(const std::string& query, size_t max_results) {
         // Mojeek only treats '+' as a space and ignores "%20", which is what
         // QueryParameters builds by default
         pw::URLInfo url_info("https://www.mojeek.com/search");
@@ -151,7 +228,9 @@ namespace {
                 },
                 search_config());
             !status || resp.status_code_category() != 200) {
-            return {};
+            // Mojeek answers scraped queries with 403 "your network appears to be
+            // sending automated queries" after only a handful in quick succession
+            return {.unavailable = true};
         }
 
         // Each result is <h2><a class="title" ... href="URL">TITLE</a></h2><p class="s">SNIPPET</p>
@@ -167,8 +246,9 @@ namespace {
                 clean((*it)[3].str()),
             });
         }
-        return results;
+        return {std::move(results)};
     }
+
     bool contains_arabic(const std::string& str) {
         // U+0600-U+06FF is encoded with a 0xD8-0xDB lead byte in UTF-8
         return std::any_of(str.begin(), str.end(), [](unsigned char c) {
@@ -177,7 +257,7 @@ namespace {
     }
 
     // Mojeek indexes English only, so Wikipedia backs up whatever it can't answer
-    std::vector<SearchResult> wikipedia_search(const std::string& query, size_t max_results) {
+    SearchResults wikipedia_search(const std::string& query, size_t max_results) {
         std::string hostname = contains_arabic(query) ? "ar.wikipedia.org" : "en.wikipedia.org";
 
         pw::URLInfo url_info("https://" + hostname + "/w/api.php");
@@ -198,7 +278,7 @@ namespace {
                 },
                 search_config());
             !status || resp.status_code_category() != 200) {
-            return {};
+            return {.unavailable = true};
         }
 
         std::vector<SearchResult> results;
@@ -219,36 +299,59 @@ namespace {
                 });
             }
         } catch (const nlohmann::json::exception&) {
-            return {};
+            return {.unavailable = true};
         }
-        return results;
+        return {std::move(results)};
     }
 } // namespace
 
-std::vector<SearchResult> web_search(const std::string& query, size_t max_results) {
+SearchResults web_search(const std::string& query, size_t max_results) {
     if (query.empty()) return {};
 
-    std::vector<SearchResult> results;
+    // A configured backend is always preferred: unkeyed Mojeek blocks automated queries
+    if (const char* searxng_url = getenv("QURAN_SEARXNG_URL"); searxng_url && *searxng_url) {
+        return searxng_search(query, searxng_url, max_results);
+    }
+    if (const char* serper_key = getenv("QURAN_SERPER_API_KEY"); serper_key && *serper_key) {
+        return serper_search(query, serper_key, max_results);
+    }
     if (const char* brave_key = getenv("QURAN_BRAVE_API_KEY"); brave_key && *brave_key) {
-        results = brave_search(query, brave_key, max_results);
-    } else {
-        results = mojeek_search(query, max_results);
+        return brave_search(query, brave_key, max_results);
     }
 
-    if (results.empty()) results = wikipedia_search(query, max_results);
-    return results;
+    // Wikipedia covers what Mojeek structurally cannot, which is anything not in English.
+    // It is not a general fallback: its full text search answers almost any query with
+    // something, and citing an unrelated article is worse than admitting to no results.
+    if (contains_arabic(query)) {
+        return wikipedia_search(query, max_results);
+    }
+
+    auto search_results = mojeek_search(query, max_results);
+    if (search_results.results.empty() && !search_results.unavailable) {
+        // Quoted phrases narrow Mojeek to nothing far more often than they help
+        std::string unquoted = query;
+        std::erase(unquoted, '"');
+        if (unquoted != query) search_results = mojeek_search(unquoted, max_results);
+    }
+    return search_results;
 }
 
-std::string format_search_results(const std::vector<SearchResult>& results) {
-    if (results.empty()) {
+std::string format_search_results(const SearchResults& search_results) {
+    if (search_results.unavailable) {
+        return "Web search is temporarily unavailable, so this query could not be run. Answer "
+               "from your own knowledge and say that you could not verify it. Do not state that "
+               "no information on the subject exists.";
+    }
+    if (search_results.results.empty()) {
         return "No results found. Answer from your own knowledge, and say so if you are unsure.";
     }
 
     std::string ret;
-    for (size_t i = 0; i < results.size(); ++i) {
-        ret += '[' + std::to_string(i + 1) + "] " + results[i].title + '\n' +
-               results[i].url + '\n' +
-               results[i].snippet + "\n\n";
+    for (size_t i = 0; i < search_results.results.size(); ++i) {
+        const auto& result = search_results.results[i];
+        ret += '[' + std::to_string(i + 1) + "] " + result.title + '\n' +
+               result.url + '\n' +
+               result.snippet + "\n\n";
     }
     return ret;
 }

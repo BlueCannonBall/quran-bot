@@ -42,6 +42,13 @@ namespace {
     constexpr Prices flash_prices = {0.0028e-6, 0.14e-6, 0.28e-6};
     constexpr Prices pro_prices = {0.003625e-6, 0.435e-6, 0.87e-6};
 
+    // The model sometimes writes a tool call out as literal markup instead of returning
+    // it in tool_calls, and that markup must never reach the user as an answer
+    bool is_leaked_tool_call(const std::string& text) {
+        return (text.find("DSML") != std::string::npos && text.find("tool_call") != std::string::npos) ||
+               text.find("invoke name=\"web_search\"") != std::string::npos;
+    }
+
     double usage_cost(const nlohmann::json& resp_json, const Prices& prices) {
         if (!resp_json.contains("usage")) return 0.0;
         const auto& usage = resp_json["usage"];
@@ -66,13 +73,15 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
     DeepSeekResponse result;
     result.cost = 0.0;
 
+    bool answer_forced = false;
     for (int round = 0;; ++round) {
-        // Searching is offered until the last round, which must produce an answer
-        bool tools_offered = enable_search && round < max_tool_rounds;
-        if (tools_offered) {
+        // Searching is offered until the last round, which must produce an answer. The tool
+        // stays declared either way, since taking it back mid conversation leaves the model
+        // imitating its own tool call syntax in prose.
+        bool tools_offered = enable_search && !answer_forced && round < max_tool_rounds;
+        if (enable_search) {
             req["tools"] = nlohmann::json::array({search_tool});
-        } else {
-            req.erase("tools");
+            req["tool_choice"] = tools_offered ? "auto" : "none";
         }
 
         pw::Response resp;
@@ -107,7 +116,16 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
         const auto& message = resp_json["choices"][0]["message"];
         // Servicing tool calls the last round didn't offer would loop forever
         if (tools_offered && message.contains("tool_calls") && message["tool_calls"].is_array() && !message["tool_calls"].empty()) {
-            req["messages"].push_back(message);
+            // Only the fields DeepSeek takes back: reasoning_content is an input to the
+            // beta prefix completion feature, not something an ordinary request accepts
+            nlohmann::json assistant_message = {
+                {"role", "assistant"},
+                {"tool_calls", message["tool_calls"]},
+            };
+            if (message.contains("content") && message["content"].is_string()) {
+                assistant_message["content"] = message["content"];
+            }
+            req["messages"].push_back(std::move(assistant_message));
             for (const auto& tool_call : message["tool_calls"]) {
                 std::string query;
                 if (tool_call.contains("function") && tool_call["function"].contains("arguments")) {
@@ -119,7 +137,7 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
                 }
 
                 auto search_results = web_search(query);
-                for (const auto& search_result : search_results) {
+                for (const auto& search_result : search_results.results) {
                     if (std::find(result.sources.begin(), result.sources.end(), search_result.url) == result.sources.end()) {
                         result.sources.push_back(search_result.url);
                     }
@@ -134,11 +152,21 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             continue;
         }
 
-        if (!message.contains("content") || !message["content"].is_string() || message["content"].get<std::string>().empty()) {
+        std::string text;
+        if (message.contains("content") && message["content"].is_string()) {
+            text = message["content"].get<std::string>();
+        }
+
+        if (text.empty() || is_leaked_tool_call(text)) {
+            // One more round, with the tool forbidden rather than absent, to get prose back
+            if (!answer_forced) {
+                answer_forced = true;
+                continue;
+            }
             return std::unexpected("DeepSeek returned an empty response!");
         }
 
-        result.text = message["content"].get<std::string>();
+        result.text = std::move(text);
         return result;
     }
 }

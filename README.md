@@ -20,7 +20,17 @@ $ make
 $ QURAN_DISCORD_TOKEN=yourtokenhere QURAN_CLIENT_ID=yourclientidhere QURAN_CLIENT_SECRET=yourclientsecrethere QURAN_DEEPSEEK_API_KEY=yourkeyhere ./quran-bot
 ```
 
-Web search needs no key of its own: it uses Mojeek, falling back to Wikipedia for queries Mojeek can't serve (it indexes English only). Setting `QURAN_BRAVE_API_KEY` switches it to the Brave Search API instead, which is worth doing if Mojeek starts rate limiting the bot.
+### Web search
+
+The `/ask` and `/reply` commands search the web when a question calls for it. With nothing configured this falls back to scraping Mojeek, with Wikipedia covering the languages Mojeek doesn't index (it is English only). That fallback is a bonus, not something to rely on: Mojeek blocks automated queries with `403 "your network appears to be sending automated queries"` after as few as one or two in quick succession.
+
+Set any one of these to use a real backend instead. They are checked in this order, and the rest of the bot is unaffected by which you pick:
+
+| Variable | Backend | Notes |
+| --- | --- | --- |
+| `QURAN_SEARXNG_URL` | A self-hosted [SearXNG](https://docs.searxng.org/) | No account, no quota. Needs `json` listed under `formats:` in `settings.yml` |
+| `QURAN_SERPER_API_KEY` | [Serper](https://serper.dev/) | Google results, 2,500 free queries on signup, no card required |
+| `QURAN_BRAVE_API_KEY` | [Brave Search API](https://brave.com/search/api/) | 2,000 queries/month free, but signup asks for payment details |
 
 ## Usage
 The `/quote` command can be used to quote either a single verse or a range of verses, and `/search` searches for strings in the Qur'an. The `/ask` command uses generative AI to answer questions about Islam, searching the web when a question calls for it and citing what it consulted, and `/reply` continues that conversation.
