@@ -4,11 +4,17 @@
 #include <expected>
 #include "json.hpp"
 
+// A page the model consulted via web search
+struct Source {
+    std::string title;
+    std::string url;
+};
+
 struct DeepSeekResponse {
     std::string text;
     std::string model_version;
     double cost;
-    std::vector<std::string> sources; // URLs the model consulted via web search
+    std::vector<Source> sources;
 };
 
 // Runs a chat completion to conclusion, servicing any web_search tool calls

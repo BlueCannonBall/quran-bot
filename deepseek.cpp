@@ -138,8 +138,10 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
 
                 auto search_results = web_search(query);
                 for (const auto& search_result : search_results.results) {
-                    if (std::find(result.sources.begin(), result.sources.end(), search_result.url) == result.sources.end()) {
-                        result.sources.push_back(search_result.url);
+                    if (std::none_of(result.sources.begin(), result.sources.end(), [&search_result](const Source& source) {
+                            return source.url == search_result.url;
+                        })) {
+                        result.sources.push_back({search_result.title, search_result.url});
                     }
                 }
 

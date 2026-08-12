@@ -42,11 +42,51 @@ std::string extract_json(const std::string& text) {
     return text.substr(start, end - start + 1);
 }
 
-// Lists the pages the model consulted, within Discord's 1024 character field limit
-void add_sources_field(dpp::embed& embed, const std::vector<std::string>& sources) {
+// Discord rejects the whole message when any of these is exceeded
+constexpr size_t embed_title_limit = 256;
+constexpr size_t embed_description_limit = 4096;
+
+// Cuts on a UTF-8 character boundary, counting the ellipsis against the limit, since
+// half of a multi-byte character is invalid UTF-8 and is rejected just as a long one is
+std::string truncate(const std::string& text, size_t max_length) {
+    if (text.size() <= max_length) return text;
+
+    const static std::string ellipsis = "...";
+    bool room_for_ellipsis = max_length > ellipsis.size();
+
+    size_t cut = room_for_ellipsis ? max_length - ellipsis.size() : max_length;
+    while (cut > 0 && ((unsigned char) text[cut] & 0xC0) == 0x80) --cut;
+    return room_for_ellipsis ? text.substr(0, cut) + ellipsis : text.substr(0, cut);
+}
+
+// Lists the pages the model consulted, within Discord's 1024 character field limit.
+// Embed fields render masked links, which spares the reader a percent encoded URL.
+void add_sources_field(dpp::embed& embed, const std::vector<Source>& sources) {
     std::string value;
     for (const auto& source : sources) {
-        std::string line = "• " + source + '\n';
+        std::string line;
+        if (source.title.empty()) {
+            line = "- " + source.url + '\n';
+        } else {
+            // A bracket ends the link text early and a parenthesis ends the URL early
+            std::string title;
+            for (char c : truncate(source.title, 80)) {
+                if (c == '[' || c == ']' || c == '\\') title.push_back('\\');
+                title.push_back(c);
+            }
+
+            std::string url;
+            for (char c : source.url) {
+                switch (c) {
+                case '(': url += "%28"; break;
+                case ')': url += "%29"; break;
+                default: url.push_back(c);
+                }
+            }
+
+            line = "- [" + title + "](" + url + ")\n";
+        }
+
         if (value.size() + line.size() > 1024) break;
         value += line;
     }
@@ -606,7 +646,7 @@ int main() {
             dpp::embed embed;
             embed.set_color(0x009736);
             embed.set_author(result->model_version, {}, {});
-            embed.set_title("AI Response");
+            embed.set_title(truncate(query, embed_title_limit));
             std::string answer = result->text;
             {
                 std::lock_guard<std::mutex> lock(conversation_mutex);
@@ -615,11 +655,7 @@ int main() {
                     {{"role", "assistant"}, {"content", answer}}
                 };
             }
-            std::string display_query = query;
-            if (display_query.length() > 200) {
-                display_query = display_query.substr(0, 197) + "...";
-            }
-            embed.set_description("__**Question:** " + display_query + "__\n**Answer:** " + answer);
+            embed.set_description(truncate(answer, embed_description_limit));
             add_sources_field(embed, result->sources);
             embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
             event.edit_original_response(embed);
@@ -670,7 +706,7 @@ int main() {
             dpp::embed embed;
             embed.set_color(0x009736);
             embed.set_author(result->model_version, {}, {});
-            embed.set_title("AI Response");
+            embed.set_title(truncate(query, embed_title_limit));
             std::string answer = result->text;
             {
                 std::lock_guard<std::mutex> lock(conversation_mutex);
@@ -679,11 +715,7 @@ int main() {
                 else history.push_back({{"role", "user"}, {"content", query}});
                 history.push_back({{"role", "assistant"}, {"content", answer}});
             }
-            std::string display_query = query;
-            if (display_query.length() > 200) {
-                display_query = display_query.substr(0, 197) + "...";
-            }
-            embed.set_description("__**Question:** " + display_query + "__\n**Answer:** " + answer);
+            embed.set_description(truncate(answer, embed_description_limit));
             add_sources_field(embed, result->sources);
             embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
             event.edit_original_response(embed);
