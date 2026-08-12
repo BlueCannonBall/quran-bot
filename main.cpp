@@ -323,7 +323,7 @@ int main() {
             ai_search_command.add_option(dpp::command_option(dpp::co_string, "query", "Search description", true));
             ai_search_command.add_option(translation_option);
             ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (true by default)", false));
-            ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
+            ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (true by default)", false));
             ai_search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
             ai_search_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
@@ -793,7 +793,8 @@ int main() {
         } else {
             ephemeral = true;
         }
-        bool fast = false;
+        // Picking verse references is constrained enough that the faster model suffices
+        bool fast = true;
         if (std::holds_alternative<bool>(event.get_parameter("fast"))) {
             fast = std::get<bool>(event.get_parameter("fast"));
         }
