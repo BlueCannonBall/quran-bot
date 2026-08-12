@@ -18,13 +18,57 @@
 
 #define TRANSLATION_COUNT 4
 
+#include <chrono>
 #include <map>
 #include <mutex>
 
 using nlohmann::json;
 
-std::map<dpp::snowflake, json> conversation_cache;
+// A conversation belongs to one user in one channel, so that a thread started in one
+// server is not silently continued in another
+typedef std::pair<uint64_t, uint64_t> ConversationKey;
+
+struct Conversation {
+    json messages = json::array();
+    std::chrono::steady_clock::time_point last_used;
+};
+
+constexpr size_t max_conversation_messages = 20; // Ten exchanges
+constexpr size_t max_conversation_bytes = 24'000;
+constexpr auto conversation_ttl = std::chrono::hours(2);
+
+std::map<ConversationKey, Conversation> conversation_cache;
 std::mutex conversation_mutex;
+
+ConversationKey conversation_key(const dpp::slashcommand_t& event) {
+    return {(uint64_t) event.command.usr.id, (uint64_t) event.command.channel_id};
+}
+
+// Both of these must be called with conversation_mutex held
+
+// Drops the oldest exchanges in pairs, so the history still opens with a user message
+void trim_conversation(json& messages) {
+    auto too_long = [&messages] {
+        return messages.size() > max_conversation_messages ||
+               messages.dump().size() > max_conversation_bytes;
+    };
+
+    while (messages.size() > 2 && too_long()) {
+        messages.erase(messages.begin());
+        messages.erase(messages.begin());
+    }
+}
+
+// Without this the cache would keep an entry for every user the bot ever served
+void evict_stale_conversations(std::chrono::steady_clock::time_point now) {
+    for (auto it = conversation_cache.begin(); it != conversation_cache.end();) {
+        if (now - it->second.last_used > conversation_ttl) {
+            it = conversation_cache.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
 
 std::string getenv_string(const std::string& var) {
     char* ret = getenv(var.c_str());
@@ -259,18 +303,21 @@ int main() {
             quote_command.add_option(translation_option);
             quote_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             quote_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+            quote_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             dpp::slashcommand search_command("search", "Search for a pattern in the Holy Qur'an", bot.me.id);
             search_command.add_option(dpp::command_option(dpp::co_string, "pattern", "The string to look for", true));
             search_command.add_option(translation_option);
             search_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (true by default)", false));
             search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+            search_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             dpp::slashcommand ask_command("ask", "Ask Qur'an Bot a question about Islam", bot.me.id);
             ask_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked", true));
             ask_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             ask_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
             ask_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+            ask_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             dpp::slashcommand ai_search_command("aisearch", "Search for something in the Holy Qur'an using AI", bot.me.id);
             ai_search_command.add_option(dpp::command_option(dpp::co_string, "query", "Search description", true));
@@ -278,12 +325,14 @@ int main() {
             ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (true by default)", false));
             ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
             ai_search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+            ai_search_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             dpp::slashcommand reply_command("reply", "Continue your conversation with Qur'an Bot", bot.me.id);
             reply_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked", true));
             reply_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             reply_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
             reply_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
+            reply_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             bot.global_bulk_command_create({quote_command, search_command, ask_command, reply_command, ai_search_command});
         }
@@ -649,11 +698,17 @@ int main() {
             embed.set_title(truncate(query, embed_title_limit));
             std::string answer = result->text;
             {
+                // Asking again starts the conversation over
+                auto now = std::chrono::steady_clock::now();
                 std::lock_guard<std::mutex> lock(conversation_mutex);
-                conversation_cache[event.command.usr.id] = {
+                evict_stale_conversations(now);
+
+                auto& conversation = conversation_cache[conversation_key(event)];
+                conversation.messages = {
                     {{"role", "user"}, {"content", query}},
                     {{"role", "assistant"}, {"content", answer}}
                 };
+                conversation.last_used = now;
             }
             embed.set_description(truncate(answer, embed_description_limit));
             add_sources_field(embed, result->sources);
@@ -678,9 +733,13 @@ int main() {
             std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
             json contents = json::array();
             {
+                auto now = std::chrono::steady_clock::now();
                 std::lock_guard<std::mutex> lock(conversation_mutex);
-                if (conversation_cache.find(event.command.usr.id) != conversation_cache.end()) {
-                    contents = conversation_cache[event.command.usr.id];
+                evict_stale_conversations(now);
+
+                if (auto it = conversation_cache.find(conversation_key(event)); it != conversation_cache.end()) {
+                    contents = it->second.messages;
+                    it->second.last_used = now; // Keep it alive while the reply is in flight
                 }
             }
             contents.push_back({{"role", "user"}, {"content", query}});
@@ -709,11 +768,16 @@ int main() {
             embed.set_title(truncate(query, embed_title_limit));
             std::string answer = result->text;
             {
+                // Appended to whatever the conversation holds now, rather than writing back
+                // the snapshot read before the request, which another reply may have grown
+                auto now = std::chrono::steady_clock::now();
                 std::lock_guard<std::mutex> lock(conversation_mutex);
-                auto& history = conversation_cache[event.command.usr.id];
-                if (history.empty()) history = contents;
-                else history.push_back({{"role", "user"}, {"content", query}});
-                history.push_back({{"role", "assistant"}, {"content", answer}});
+
+                auto& conversation = conversation_cache[conversation_key(event)];
+                conversation.messages.push_back({{"role", "user"}, {"content", query}});
+                conversation.messages.push_back({{"role", "assistant"}, {"content", answer}});
+                trim_conversation(conversation.messages);
+                conversation.last_used = now;
             }
             embed.set_description(truncate(answer, embed_description_limit));
             add_sources_field(embed, result->sources);
