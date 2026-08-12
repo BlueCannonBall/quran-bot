@@ -14,14 +14,16 @@ A Discord bot for quoting and searching the Holy Qur'an.
 - OpenSSL
 
 ## Execution
-Compile it with `make`, and run it with `QURAN_DISCORD_TOKEN`, `QURAN_CLIENT_ID`, `QURAN_CLIENT_SECRET`, and `QURAN_GOOGLE_API_KEY` as follows:
+Compile it with `make`, and run it with `QURAN_DISCORD_TOKEN`, `QURAN_CLIENT_ID`, `QURAN_CLIENT_SECRET`, and `QURAN_DEEPSEEK_API_KEY` as follows:
 ```
 $ make
-$ QURAN_DISCORD_TOKEN=yourtokenhere QURAN_CLIENT_ID=yourclientidhere QURAN_CLIENT_SECRET=yourclientsecrethere QURAN_GOOGLE_API_KEY=yourkeyhere ./quran-bot
+$ QURAN_DISCORD_TOKEN=yourtokenhere QURAN_CLIENT_ID=yourclientidhere QURAN_CLIENT_SECRET=yourclientsecrethere QURAN_DEEPSEEK_API_KEY=yourkeyhere ./quran-bot
 ```
 
+Web search needs no key of its own: it uses Mojeek, falling back to Wikipedia for queries Mojeek can't serve (it indexes English only). Setting `QURAN_BRAVE_API_KEY` switches it to the Brave Search API instead, which is worth doing if Mojeek starts rate limiting the bot.
+
 ## Usage
-The `/quote` command can be used to quote either a single verse or a range of verses, and `/search` searches for strings in the Qur'an. The `/ask` command uses generative AI to answer questions about Islam.
+The `/quote` command can be used to quote either a single verse or a range of verses, and `/search` searches for strings in the Qur'an. The `/ask` command uses generative AI to answer questions about Islam, searching the web when a question calls for it and citing what it consulted, and `/reply` continues that conversation.
 
 ## Screenshots
 ![image](https://github.com/user-attachments/assets/d21d7c3e-fe9e-4be7-a009-31136302da19)

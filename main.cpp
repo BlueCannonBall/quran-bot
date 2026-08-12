@@ -1,7 +1,7 @@
 #include "Polyweb/polyweb.hpp"
 #include "Polyweb/string.hpp"
 #include "json.hpp"
-#include "gemini.hpp"
+#include "deepseek.hpp"
 #include "system_instructions.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string>
 #include <utility>
+#include <vector>
 
 #define TRANSLATION_COUNT 4
 
@@ -29,6 +30,27 @@ std::string getenv_string(const std::string& var) {
     char* ret = getenv(var.c_str());
     assert(ret);
     return ret;
+}
+
+// Isolates the JSON value in a model response, tolerating code fences and stray prose
+std::string extract_json(const std::string& text) {
+    size_t start = text.find_first_of("[{");
+    size_t end = text.find_last_of("]}");
+    if (start == std::string::npos || end == std::string::npos || end < start) {
+        return text;
+    }
+    return text.substr(start, end - start + 1);
+}
+
+// Lists the pages the model consulted, within Discord's 1024 character field limit
+void add_sources_field(dpp::embed& embed, const std::vector<std::string>& sources) {
+    std::string value;
+    for (const auto& source : sources) {
+        std::string line = "• " + source + '\n';
+        if (value.size() + line.size() > 1024) break;
+        value += line;
+    }
+    if (!value.empty()) embed.add_field("Sources", value);
 }
 
 std::string to_superscript(int number) {
@@ -561,12 +583,16 @@ int main() {
             std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
 
             json req = {
-                {"system_instruction", {{"parts", {{{"text", ask_instructions}}}}}},
-                {"contents", {{{"role", "user"}, {"parts", {{{"text", query}}}}}}},
-                {"tools", {{{"googleSearch", json::object()}}}},
+                {
+                    "messages",
+                    {
+                        {{"role", "system"}, {"content", ask_instructions}},
+                        {{"role", "user"}, {"content", query}},
+                    },
+                },
             };
 
-            auto result = generate_content(req, fast, getenv_string("QURAN_GOOGLE_API_KEY"));
+            auto result = generate_content(req, fast, getenv_string("QURAN_DEEPSEEK_API_KEY"), true);
             if (!result) {
                 event.edit_original_response(dpp::message(result.error()));
                 return;
@@ -585,8 +611,8 @@ int main() {
             {
                 std::lock_guard<std::mutex> lock(conversation_mutex);
                 conversation_cache[event.command.usr.id] = {
-                    {{"role", "user"}, {"parts", {{{"text", query}}}}},
-                    {{"role", "model"}, {"parts", {{{"text", answer}}}}}
+                    {{"role", "user"}, {"content", query}},
+                    {{"role", "assistant"}, {"content", answer}}
                 };
             }
             std::string display_query = query;
@@ -594,6 +620,7 @@ int main() {
                 display_query = display_query.substr(0, 197) + "...";
             }
             embed.set_description("__**Question:** " + display_query + "__\n**Answer:** " + answer);
+            add_sources_field(embed, result->sources);
             embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
             event.edit_original_response(embed);
         });
@@ -620,15 +647,16 @@ int main() {
                     contents = conversation_cache[event.command.usr.id];
                 }
             }
-            contents.push_back({{"role", "user"}, {"parts", {{{"text", query}}}}});
+            contents.push_back({{"role", "user"}, {"content", query}});
+
+            json messages = json::array({{{"role", "system"}, {"content", ask_instructions}}});
+            messages.insert(messages.end(), contents.begin(), contents.end());
 
             json req = {
-                {"system_instruction", {{"parts", {{{"text", ask_instructions}}}}}},
-                {"contents", contents},
-                {"tools", {{{"googleSearch", json::object()}}}},
+                {"messages", messages},
             };
 
-            auto result = generate_content(req, fast, getenv_string("QURAN_GOOGLE_API_KEY"));
+            auto result = generate_content(req, fast, getenv_string("QURAN_DEEPSEEK_API_KEY"), true);
             if (!result) {
                 event.edit_original_response(dpp::message(result.error()));
                 return;
@@ -648,14 +676,15 @@ int main() {
                 std::lock_guard<std::mutex> lock(conversation_mutex);
                 auto& history = conversation_cache[event.command.usr.id];
                 if (history.empty()) history = contents;
-                else history.push_back({{"role", "user"}, {"parts", {{{"text", query}}}}});
-                history.push_back({{"role", "model"}, {"parts", {{{"text", answer}}}}});
+                else history.push_back({{"role", "user"}, {"content", query}});
+                history.push_back({{"role", "assistant"}, {"content", answer}});
             }
             std::string display_query = query;
             if (display_query.length() > 200) {
                 display_query = display_query.substr(0, 197) + "...";
             }
             embed.set_description("__**Question:** " + display_query + "__\n**Answer:** " + answer);
+            add_sources_field(embed, result->sources);
             embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
             event.edit_original_response(embed);
         });
@@ -683,38 +712,17 @@ int main() {
             }
 
             json req = {
-                {"system_instruction", {{"parts", {{{"text", ai_search_instructions}}}}}},
-                {"contents", {{"parts", {{{"text", query}}}}}},
                 {
-                    "generationConfig",
+                    "messages",
                     {
-                        {"response_mime_type", "application/json"},
-                        {
-                            "response_schema",
-                            {
-                                {"type", "ARRAY"},
-                                {
-                                    "items",
-                                    {
-                                        {"type", "OBJECT"},
-                                        {
-                                            "properties",
-                                            {
-                                                {"surah", {{"type", "INTEGER"}}},
-                                                {"first_ayah", {{"type", "INTEGER"}}},
-                                                {"last_ayah", {{"type", "INTEGER"}, {"nullable", true}}},
-                                            },
-                                        },
-                                        {"required", {"surah", "first_ayah"}},
-                                    },
-                                },
-                            },
-                        },
+                        {{"role", "system"}, {"content", ai_search_instructions}},
+                        {{"role", "user"}, {"content", query}},
                     },
                 },
+                {"response_format", {{"type", "json_object"}}},
             };
 
-            auto result = generate_content(req, fast, getenv_string("QURAN_GOOGLE_API_KEY"));
+            auto result = generate_content(req, fast, getenv_string("QURAN_DEEPSEEK_API_KEY"));
             if (!result) {
                 event.edit_original_response(dpp::message(result.error()));
                 return;
@@ -725,7 +733,27 @@ int main() {
                 snprintf(cost_str, sizeof(cost_str), " | Cost: $%.5f", result->cost);
             }
 
-            json results_json = json::parse(result->text);
+            json results_json;
+            try {
+                results_json = json::parse(extract_json(result->text));
+            } catch (const json::exception&) {
+                event.edit_original_response(dpp::message("The AI returned a malformed response. Please try again."));
+                return;
+            }
+            if (results_json.is_object()) {
+                // Tolerate the array being wrapped in an object
+                for (const auto& member : results_json) {
+                    if (member.is_array()) {
+                        results_json = member;
+                        break;
+                    }
+                }
+            }
+            if (!results_json.is_array()) {
+                event.edit_original_response(dpp::message("The AI returned a malformed response. Please try again."));
+                return;
+            }
+
             if (results_json.empty()) {
                 event.edit_original_response(dpp::message("No matches found."));
             } else {
@@ -734,13 +762,20 @@ int main() {
                 embed.set_author(translations[translation].second, {}, {});
                 embed.set_title("Search Results (Powered by " + result->model_version + ')');
                 for (const auto& result : results_json.items()) {
+                    // Without a response schema, entries the model got wrong are simply skipped
+                    if (!result.value().is_object() ||
+                        !result.value().value("surah", json()).is_number_integer() ||
+                        !result.value().value("first_ayah", json()).is_number_integer()) {
+                        continue;
+                    }
+
                     unsigned short surah = clamp_surah(result.value()["surah"]);
                     unsigned short first_ayah = clamp_ayah(surah, result.value()["first_ayah"]);
 
                     json::iterator last_ayah_it;
                     unsigned short last_ayah;
                     if ((last_ayah_it = result.value().find("last_ayah")) != result.value().end() &&
-                        !last_ayah_it->is_null() &&
+                        last_ayah_it->is_number_integer() &&
                         (last_ayah = clamp_ayah(surah, *last_ayah_it)) != first_ayah) {
                         std::string text;
                         for (unsigned short ayah = first_ayah; ayah <= last_ayah; ++ayah) {

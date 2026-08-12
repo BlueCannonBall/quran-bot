@@ -58,13 +58,19 @@ libraries := $(library_flag)"dpp" $(library_flag)"ssl" $(library_flag)"crypto"
 all: quran-bot$(out_ext)
 .PHONY: all
 
-obj/gemini_0$(obj_ext): ./gemini.cpp .polybuild.mk ./gemini.hpp
+obj/deepseek_0$(obj_ext): ./deepseek.cpp .polybuild.mk ./deepseek.hpp ./json.hpp ./search.hpp ./Polyweb/polyweb.hpp ./Polyweb/Polynet/polynet.hpp ./Polyweb/Polynet/error.hpp ./Polyweb/Polynet/string.hpp ./Polyweb/Polynet/tls.hpp ./Polyweb/error.hpp ./Polyweb/string.hpp ./Polyweb/thread_pool.hpp
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Compiling $@ from $<..."
 	@mkdir -p obj
 	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Finished compiling $@ from $<!"
 
-obj/main_0$(obj_ext): ./main.cpp .polybuild.mk ./Polyweb/polyweb.hpp ./Polyweb/Polynet/polynet.hpp ./Polyweb/Polynet/error.hpp ./Polyweb/Polynet/string.hpp ./Polyweb/Polynet/tls.hpp ./Polyweb/error.hpp ./Polyweb/string.hpp ./Polyweb/thread_pool.hpp ./json.hpp ./gemini.hpp ./system_instructions.hpp
+obj/main_0$(obj_ext): ./main.cpp .polybuild.mk ./Polyweb/polyweb.hpp ./Polyweb/Polynet/polynet.hpp ./Polyweb/Polynet/error.hpp ./Polyweb/Polynet/string.hpp ./Polyweb/Polynet/tls.hpp ./Polyweb/error.hpp ./Polyweb/string.hpp ./Polyweb/thread_pool.hpp ./json.hpp ./deepseek.hpp ./system_instructions.hpp
+	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Compiling $@ from $<..."
+	@mkdir -p obj
+	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@
+	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Finished compiling $@ from $<!"
+
+obj/search_0$(obj_ext): ./search.cpp .polybuild.mk ./search.hpp ./Polyweb/polyweb.hpp ./Polyweb/Polynet/polynet.hpp ./Polyweb/Polynet/error.hpp ./Polyweb/Polynet/string.hpp ./Polyweb/Polynet/tls.hpp ./Polyweb/error.hpp ./Polyweb/string.hpp ./Polyweb/thread_pool.hpp ./json.hpp
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Compiling $@ from $<..."
 	@mkdir -p obj
 	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@
@@ -124,7 +130,7 @@ obj/tls_0$(obj_ext): Polyweb/Polynet/tls.cpp .polybuild.mk Polyweb/Polynet/tls.h
 	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Finished compiling $@ from $<!"
 
-objects :=  obj/gemini_0$(obj_ext) obj/main_0$(obj_ext) obj/client_0$(obj_ext) obj/error_0$(obj_ext) obj/polyweb_0$(obj_ext) obj/server_0$(obj_ext) obj/string_0$(obj_ext) obj/websocket_0$(obj_ext) obj/error_1$(obj_ext) obj/polynet_0$(obj_ext) obj/tls_0$(obj_ext)
+objects :=  obj/deepseek_0$(obj_ext) obj/main_0$(obj_ext) obj/search_0$(obj_ext) obj/client_0$(obj_ext) obj/error_0$(obj_ext) obj/polyweb_0$(obj_ext) obj/server_0$(obj_ext) obj/string_0$(obj_ext) obj/websocket_0$(obj_ext) obj/error_1$(obj_ext) obj/polynet_0$(obj_ext) obj/tls_0$(obj_ext)
 quran-bot$(out_ext): .polybuild.mk $(objects) $(static_libraries)
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Building $@..."
 	@$(cpp_compiler) $(objects) $(static_libraries) $(cpp_compilation_flags) $(out_path_flag)$@ $(link_flag) $(link_time_flags) $(libraries)
