@@ -303,21 +303,18 @@ int main() {
             quote_command.add_option(translation_option);
             quote_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             quote_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
-            quote_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             dpp::slashcommand search_command("search", "Search for a pattern in the Holy Qur'an", bot.me.id);
             search_command.add_option(dpp::command_option(dpp::co_string, "pattern", "The string to look for", true));
             search_command.add_option(translation_option);
             search_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (true by default)", false));
             search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
-            search_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             dpp::slashcommand ask_command("ask", "Ask Qur'an Bot a question about Islam", bot.me.id);
             ask_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked", true));
             ask_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             ask_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
             ask_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
-            ask_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             dpp::slashcommand ai_search_command("aisearch", "Search for something in the Holy Qur'an using AI", bot.me.id);
             ai_search_command.add_option(dpp::command_option(dpp::co_string, "query", "Search description", true));
@@ -325,14 +322,12 @@ int main() {
             ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (true by default)", false));
             ai_search_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (true by default)", false));
             ai_search_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
-            ai_search_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             dpp::slashcommand reply_command("reply", "Continue your conversation with Qur'an Bot", bot.me.id);
             reply_command.add_option(dpp::command_option(dpp::co_string, "query", "The question being asked", true));
             reply_command.add_option(dpp::command_option(dpp::co_boolean, "ephemeral", "Whether or not the response is private and temporary (false by default)", false));
             reply_command.add_option(dpp::command_option(dpp::co_boolean, "fast", "Use a faster, cheaper AI model (false by default)", false));
             reply_command.set_interaction_contexts({dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel});
-            reply_command.set_integration_types({dpp::ait_guild_install, dpp::ait_user_install});
 
             bot.global_bulk_command_create({quote_command, search_command, ask_command, reply_command, ai_search_command});
         }
