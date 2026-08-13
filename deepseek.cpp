@@ -1,4 +1,5 @@
 #include "deepseek.hpp"
+#include "quran.hpp"
 #include "search.hpp"
 #include "Polyweb/polyweb.hpp"
 #include <algorithm>
@@ -31,6 +32,80 @@ namespace {
             },
         },
     };
+
+    // Reading from the loaded corpus costs nothing, so the model is told to reach for
+    // these rather than quote the Qur'an from memory
+    const nlohmann::json quote_tool = {
+        {"type", "function"},
+        {
+            "function",
+            {
+                {"name", "quote_quran"},
+                {"description", "Retrieve the exact text of a verse or range of verses of the Qur'an. Use this for every Qur'anic quotation instead of quoting from memory, and to confirm that a verse says what you believe it says."},
+                {
+                    "parameters",
+                    {
+                        {"type", "object"},
+                        {
+                            "properties",
+                            {
+                                {"surah", {{"type", "integer"}, {"description", "Number of the surah, 1 to 114"}}},
+                                {"first_ayah", {{"type", "integer"}, {"description", "First ayah of the range"}}},
+                                {"last_ayah", {{"type", "integer"}, {"description", "Last ayah of the range, omitted for a single verse"}}},
+                            },
+                        },
+                        {"required", {"surah", "first_ayah"}},
+                    },
+                },
+            },
+        },
+    };
+
+    const nlohmann::json quran_search_tool = {
+        {"type", "function"},
+        {
+            "function",
+            {
+                {"name", "search_quran"},
+                {"description", "Find verses of the Qur'an whose translation contains a given wording. Use it to locate a verse whose reference you do not remember, before quoting it with quote_quran."},
+                {
+                    "parameters",
+                    {
+                        {"type", "object"},
+                        {
+                            "properties",
+                            {
+                                {"pattern", {{"type", "string"}, {"description", "Words to look for in the English translation"}}},
+                            },
+                        },
+                        {"required", {"pattern"}},
+                    },
+                },
+            },
+        },
+    };
+
+    // The model writes these arguments, so a wrong type is its mistake to absorb, not
+    // an exception to throw on a worker thread
+    int int_argument(const nlohmann::json& arguments, const char* key) {
+        if (auto it = arguments.find(key); it != arguments.end()) {
+            if (it->is_number_integer()) return it->get<int>();
+            if (it->is_string()) {
+                try {
+                    return std::stoi(it->get<std::string>());
+                } catch (const std::exception&) {
+                }
+            }
+        }
+        return 0;
+    }
+
+    std::string string_argument(const nlohmann::json& arguments, const char* key) {
+        if (auto it = arguments.find(key); it != arguments.end() && it->is_string()) {
+            return it->get<std::string>();
+        }
+        return {};
+    }
 
     struct Prices {
         double cache_hit;
@@ -80,7 +155,7 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
         // imitating its own tool call syntax in prose.
         bool tools_offered = enable_search && !answer_forced && round < max_tool_rounds;
         if (enable_search) {
-            req["tools"] = nlohmann::json::array({search_tool});
+            req["tools"] = nlohmann::json::array({quote_tool, quran_search_tool, search_tool});
             req["tool_choice"] = tools_offered ? "auto" : "none";
         }
 
@@ -127,28 +202,41 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             }
             req["messages"].push_back(std::move(assistant_message));
             for (const auto& tool_call : message["tool_calls"]) {
-                std::string query;
-                if (tool_call.contains("function") && tool_call["function"].contains("arguments")) {
+                std::string name;
+                nlohmann::json arguments = nlohmann::json::object();
+                if (tool_call.contains("function")) {
+                    name = tool_call["function"].value("name", "");
                     try {
-                        query = nlohmann::json::parse(tool_call["function"]["arguments"].get<std::string>()).value("query", "");
+                        arguments = nlohmann::json::parse(tool_call["function"].value("arguments", "{}"));
+                        if (!arguments.is_object()) arguments = nlohmann::json::object();
                     } catch (const nlohmann::json::exception&) {
-                        // Leave the query empty, which web_search reports as no results
+                        // Leave the arguments empty, which each tool reports in its own way
                     }
                 }
 
-                auto search_results = web_search(query);
-                for (const auto& search_result : search_results.results) {
-                    if (std::none_of(result.sources.begin(), result.sources.end(), [&search_result](const Source& source) {
-                            return source.url == search_result.url;
-                        })) {
-                        result.sources.push_back({search_result.title, search_result.url});
+                std::string content;
+                if (name == "quote_quran") {
+                    content = quote_quran(int_argument(arguments, "surah"),
+                        int_argument(arguments, "first_ayah"),
+                        int_argument(arguments, "last_ayah"));
+                } else if (name == "search_quran") {
+                    content = search_quran_text(string_argument(arguments, "pattern"));
+                } else {
+                    auto search_results = web_search(string_argument(arguments, "query"));
+                    for (const auto& search_result : search_results.results) {
+                        if (std::none_of(result.sources.begin(), result.sources.end(), [&search_result](const Source& source) {
+                                return source.url == search_result.url;
+                            })) {
+                            result.sources.push_back({search_result.title, search_result.url});
+                        }
                     }
+                    content = format_search_results(search_results);
                 }
 
                 req["messages"].push_back({
                     {"role", "tool"},
                     {"tool_call_id", tool_call.value("id", "")},
-                    {"content", format_search_results(search_results)},
+                    {"content", content},
                 });
             }
             continue;

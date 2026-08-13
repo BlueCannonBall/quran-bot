@@ -2,6 +2,7 @@
 #include "Polyweb/string.hpp"
 #include "json.hpp"
 #include "deepseek.hpp"
+#include "quran.hpp"
 #include "system_instructions.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -15,8 +16,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-#define TRANSLATION_COUNT 4
 
 #include <chrono>
 #include <map>
@@ -137,84 +136,8 @@ void add_sources_field(dpp::embed& embed, const std::vector<Source>& sources) {
     if (!value.empty()) embed.add_field("Sources", value);
 }
 
-std::string to_superscript(int number) {
-    const static std::string superscripts[] = {"\u2070", "\u00B9", "\u00B2", "\u00B3", "\u2074", "\u2075", "\u2076", "\u2077", "\u2078", "\u2079"};
-
-    std::string ret;
-    std::string number_string = std::to_string(number);
-    ret.reserve(number_string.size() * 4);
-    for (char digit : number_string) {
-        if (digit >= '0' && digit <= '9') {
-            ret += superscripts[digit - '0'];
-        } else {
-            ret += digit;
-        }
-    }
-    return ret;
-}
-
-std::string verse_key(unsigned short surah, unsigned short ayah) {
-    return std::to_string(surah) + ':' + std::to_string(ayah);
-}
-
-unsigned short clamp_surah(unsigned short surah) {
-    return std::min<unsigned short>(std::max<unsigned short>(surah, 1), 114);
-}
-
-unsigned short clamp_ayah(unsigned short surah, unsigned short ayah, unsigned short minimum_ayah = 1) {
-    // clang-format off
-    unsigned short surah_sizes[114] = {
-        7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135,
-        112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85,
-        54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13,
-        14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42,
-        29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11,
-        11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
-    };
-    // clang-format on
-    return std::min(std::max(ayah, minimum_ayah), surah_sizes[clamp_surah(surah) - 1]);
-}
-
-bool is_poetic_surah(unsigned short surah) {
-    return surah == 1 ||
-           (surah >= 50 && surah <= 56) ||
-           (surah >= 67 && surah <= 77) ||
-           (surah >= 78 && surah <= 114);
-}
-
-std::vector<std::pair<std::string, std::string>> search_quran(const std::string* surahs, const std::vector<std::string>* ayahs, std::string pattern, unsigned short& surah, unsigned short& ayah, unsigned short limit = 8) {
-    pw::string::to_lower(pattern);
-
-    std::vector<std::pair<std::string, std::string>> ret;
-    for (; surah <= 114; ++surah) {
-        for (; ayah <= ayahs[surah - 1].size(); ++ayah) {
-            if (size_t match_pos = pw::string::to_lower_copy(ayahs[surah - 1][ayah - 1]).find(pattern); match_pos != std::string::npos) {
-                std::string verse = ayahs[surah - 1][ayah - 1];
-                verse.insert(match_pos, "**");
-                verse.insert(match_pos + pattern.size() + 2, "**");
-                ret.emplace_back("Surah " + surahs[surah - 1] + " (" + verse_key(surah, ayah) + ')', verse);
-
-                if (ret.size() >= limit) {
-                    return ret;
-                }
-            }
-        }
-        ayah = 1;
-    }
-    return ret;
-}
-
 int main() {
     pw::thread_pool.resize(0);
-
-    std::pair<unsigned short, std::string> translations[] = {
-        {85, "M.A.S. Abdel Haleem"},
-        {20, "Saheeh International"},
-        {19, "M. Pickthall"},
-        {22, "A. Yusuf Ali"},
-    };
-    std::string surahs[114];
-    std::vector<std::string> ayahs[TRANSLATION_COUNT][114];
 
     std::string access_token;
     std::string client_id = getenv_string("QURAN_CLIENT_ID");
@@ -334,7 +257,7 @@ int main() {
         std::cout << "Qur'an Bot is ready for da'wah!" << std::endl;
     });
 
-    bot.register_command("quote", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
+    bot.register_command("quote", [&bot](const dpp::slashcommand_t& event) {
         std::istringstream verses(std::get<std::string>(event.get_parameter("verses")));
         unsigned short translation;
         if (std::holds_alternative<long>(event.get_parameter("translation"))) {
@@ -424,7 +347,7 @@ int main() {
         event.reply(message);
     });
 
-    bot.register_command("search", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
+    bot.register_command("search", [&bot](const dpp::slashcommand_t& event) {
         std::string pattern = pw::string::trim_copy(std::get<std::string>(event.get_parameter("pattern")));
         unsigned short translation;
         if (std::holds_alternative<long>(event.get_parameter("translation"))) {
@@ -480,7 +403,7 @@ int main() {
         }
     });
 
-    bot.on_button_click([translations, surahs, ayahs, &bot](const dpp::button_click_t& event) {
+    bot.on_button_click([&bot](const dpp::button_click_t& event) {
         json data = json::parse(event.custom_id);
         unsigned short translation = data["translation"];
 
@@ -781,7 +704,7 @@ int main() {
         });
     });
 
-    bot.register_command("aisearch", [translations, surahs, ayahs, &bot](const dpp::slashcommand_t& event) {
+    bot.register_command("aisearch", [&bot](const dpp::slashcommand_t& event) {
         bool ephemeral;
         if (std::holds_alternative<bool>(event.get_parameter("ephemeral"))) {
             ephemeral = std::get<bool>(event.get_parameter("ephemeral"));
@@ -794,7 +717,7 @@ int main() {
             fast = std::get<bool>(event.get_parameter("fast"));
         }
 
-        event.thinking(ephemeral, [translations, surahs, ayahs, &bot, event, fast](const dpp::confirmation_callback_t& callback) {
+        event.thinking(ephemeral, [&bot, event, fast](const dpp::confirmation_callback_t& callback) {
             std::string query = pw::string::trim_copy(std::get<std::string>(event.get_parameter("query")));
             unsigned short translation;
             if (std::holds_alternative<long>(event.get_parameter("translation"))) {
