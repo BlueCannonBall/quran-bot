@@ -144,6 +144,9 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
     DeepSeekResponse result;
     result.cost = 0.0;
 
+    // Built up across rounds, since an answer may be written in pieces either side of a
+    // tool call rather than all at once in the final message
+    std::string answer;
     bool answer_forced = false;
     for (int round = 0;; ++round) {
         // Searching is offered until the last round, which must produce an answer. The tool
@@ -194,6 +197,9 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
                 {"tool_calls", message["tool_calls"]},
             };
             if (message.contains("content") && message["content"].is_string()) {
+                // The model often begins answering before it calls a tool, and carries on
+                // where it left off afterwards, so this half of the answer must be kept
+                answer += message["content"].get<std::string>();
                 assistant_message["content"] = message["content"];
             }
             req["messages"].push_back(std::move(assistant_message));
@@ -238,12 +244,11 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             continue;
         }
 
-        std::string text;
         if (message.contains("content") && message["content"].is_string()) {
-            text = message["content"].get<std::string>();
+            answer += message["content"].get<std::string>();
         }
 
-        if (text.empty()) {
+        if (answer.empty()) {
             // One more round, with the tool forbidden rather than absent, to get prose back
             if (!answer_forced) {
                 answer_forced = true;
@@ -252,7 +257,7 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             return std::unexpected("DeepSeek returned an empty response!");
         }
 
-        result.text = std::move(text);
+        result.text = std::move(answer);
         return result;
     }
 }
