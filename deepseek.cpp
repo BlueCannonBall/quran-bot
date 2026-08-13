@@ -6,8 +6,11 @@
 #include <chrono>
 
 namespace {
-    // The model is allowed this many rounds of searching before it must answer
-    constexpr int max_tool_rounds = 3;
+    // The model is allowed this many rounds of tool use before it must answer. A round may
+    // carry any number of calls, so this bounds how often it can look at results and then
+    // fetch something else: finding a verse, quoting it, and checking a hadith is already
+    // three, and running out leaves it answering from memory.
+    constexpr int max_tool_rounds = 5;
 
     const nlohmann::json search_tool = {
         {"type", "function"},
@@ -116,13 +119,6 @@ namespace {
     // Per-token prices in USD (https://api-docs.deepseek.com/quick_start/pricing)
     constexpr Prices flash_prices = {0.0028e-6, 0.14e-6, 0.28e-6};
     constexpr Prices pro_prices = {0.003625e-6, 0.435e-6, 0.87e-6};
-
-    // The model sometimes writes a tool call out as literal markup instead of returning
-    // it in tool_calls, and that markup must never reach the user as an answer
-    bool is_leaked_tool_call(const std::string& text) {
-        return (text.find("DSML") != std::string::npos && text.find("tool_call") != std::string::npos) ||
-               text.find("invoke name=\"web_search\"") != std::string::npos;
-    }
 
     double usage_cost(const nlohmann::json& resp_json, const Prices& prices) {
         if (!resp_json.contains("usage")) return 0.0;
@@ -247,7 +243,7 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             text = message["content"].get<std::string>();
         }
 
-        if (text.empty() || is_leaked_tool_call(text)) {
+        if (text.empty()) {
             // One more round, with the tool forbidden rather than absent, to get prose back
             if (!answer_forced) {
                 answer_forced = true;
