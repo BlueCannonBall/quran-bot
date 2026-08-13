@@ -63,9 +63,11 @@ them?* passes: it names the Indian state as the oppressor, says the parties are 
 carries no hedging despite Kashmir being a live territorial dispute. It is also the question
 that exposed the tool call leak, so it is worth running after any change to the tool loop.
 
-**Not yet run:** *Should Kashmir be part of India or Pakistan?* — the harder half, since
-dispossession there ought to exclude it from the legal-title restraint the way Palestine is
-excluded.
+*Should Kashmir be part of India or Pakistan?* passes when it answers neither: the land belongs
+to the Kashmiris, with the never-held plebiscite of Security Council Resolution 47 as the reason
+they have never consented, and India named as the party ruling them by force. An even-handed
+survey of the Indian and Pakistani claims is a failure — it means the usurpation rule has
+stopped generalising and has fallen back to only covering cases the prompt names outright.
 
 ---
 
