@@ -3,7 +3,9 @@
 #include "search.hpp"
 #include "Polyweb/polyweb.hpp"
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <iostream>
 
 namespace {
     // The model is allowed this many rounds of tool use before it must answer. A round may
@@ -88,6 +90,39 @@ namespace {
         },
     };
 
+    // The model occasionally writes a tool call out as literal markup in its content rather
+    // than returning it in tool_calls. The cause is not understood, so this only keeps the
+    // markup away from the reader and puts the offending text in the log to be diagnosed.
+    // Returns whether anything was stripped.
+    bool append_content(std::string& answer, const std::string& content) {
+        // Only the bracketed token is markup. The bare word in prose is not, so an answer
+        // that happens to discuss the format is left alone.
+        size_t cut = std::string::npos;
+        for (size_t marker = content.find("DSML"); marker != std::string::npos; marker = content.find("DSML", marker + 4)) {
+            // The observed token is <||DSML||, whose bars are three bytes apiece, so the
+            // bracket sits seven bytes back; the window allows for a closing slash too
+            size_t start = content.rfind('<', marker);
+            if (start != std::string::npos && marker - start <= 12) {
+                cut = start;
+                break;
+            }
+        }
+
+        if (cut == std::string::npos) {
+            answer += content;
+            return false;
+        }
+
+        std::cerr << "[deepseek] tool call markup leaked into content, stripping it:\n"
+                  << content << std::endl;
+
+        answer.append(content, 0, cut);
+        while (!answer.empty() && std::isspace((unsigned char) answer.back())) {
+            answer.pop_back();
+        }
+        return true;
+    }
+
     // The model writes these arguments, so a wrong type is its mistake to absorb, not
     // an exception to throw on a worker thread
     int int_argument(const nlohmann::json& arguments, const char* key) {
@@ -158,11 +193,22 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             req["tool_choice"] = tools_offered ? "auto" : "none";
         }
 
+        // Forbidding the tool does not stop the model wanting it: told only "none", it writes
+        // the call it wanted out as prose instead. Saying so plainly is what stops it, and the
+        // instruction is left out of the stored conversation so it colours only this request.
+        nlohmann::json body = req;
+        if (enable_search && !tools_offered) {
+            body["messages"].push_back({
+                {"role", "user"},
+                {"content", "No further tool calls are available to you. Answer now, in prose, using only what you have already gathered."},
+            });
+        }
+
         pw::Response resp;
         if (auto status = pw::fetch("POST",
                 "https://api.deepseek.com/chat/completions",
                 resp,
-                req.dump(),
+                body.dump(),
                 pw::Headers {
                     {"Content-Type", "application/json"},
                     {"Authorization", "Bearer " + api_key},
@@ -199,7 +245,7 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             if (message.contains("content") && message["content"].is_string()) {
                 // The model often begins answering before it calls a tool, and carries on
                 // where it left off afterwards, so this half of the answer must be kept
-                answer += message["content"].get<std::string>();
+                append_content(answer, message["content"].get<std::string>());
                 assistant_message["content"] = message["content"];
             }
             req["messages"].push_back(std::move(assistant_message));
@@ -244,16 +290,17 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             continue;
         }
 
+        bool leaked = false;
         if (message.contains("content") && message["content"].is_string()) {
-            answer += message["content"].get<std::string>();
+            leaked = append_content(answer, message["content"].get<std::string>());
         }
 
+        // One more round, with the tool forbidden rather than absent, to finish in prose
+        if ((leaked || answer.empty()) && !answer_forced) {
+            answer_forced = true;
+            continue;
+        }
         if (answer.empty()) {
-            // One more round, with the tool forbidden rather than absent, to get prose back
-            if (!answer_forced) {
-                answer_forced = true;
-                continue;
-            }
             return std::unexpected("DeepSeek returned an empty response!");
         }
 
