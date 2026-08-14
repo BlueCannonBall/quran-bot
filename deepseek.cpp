@@ -12,7 +12,7 @@ namespace {
     // carry any number of calls, so this bounds how often it can look at results and then
     // fetch something else: finding a verse, quoting it, and checking a hadith is already
     // three, and running out leaves it answering from memory.
-    constexpr int max_tool_rounds = 5;
+    constexpr int max_tool_rounds = 8;
 
     const nlohmann::json search_tool = {
         {"type", "function"},
