@@ -304,6 +304,12 @@ std::expected<DeepSeekResponse, std::string> generate_content(nlohmann::json req
             return std::unexpected("DeepSeek returned an empty response!");
         }
 
+        // Logged so that an answer which arrives in Discord looking wrong can be compared
+        // against what the model actually returned, which is otherwise unrecoverable
+        std::cerr << "[deepseek] answer after " << (round + 1) << " round(s), "
+                  << answer.size() << " bytes:\n"
+                  << answer << "\n[deepseek] end of answer" << std::endl;
+
         result.text = std::move(answer);
         return result;
     }
