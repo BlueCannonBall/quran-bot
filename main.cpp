@@ -631,7 +631,13 @@ int main() {
             embed.set_description(truncate(answer, embed_description_limit));
             add_sources_field(embed, result->sources);
             embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
-            event.edit_original_response(embed);
+
+            dpp::message message(embed);
+            // What will not fit in the embed is attached whole, so the reader still has it
+            if (answer.size() > embed_description_limit) {
+                message.add_file("answer.md", answer, "text/markdown");
+            }
+            event.edit_original_response(message);
         });
     });
 
@@ -700,7 +706,13 @@ int main() {
             embed.set_description(truncate(answer, embed_description_limit));
             add_sources_field(embed, result->sources);
             embed.set_footer(std::string("Qur'an Bot by BlueCannonBall") + cost_str, bot.me.get_avatar_url());
-            event.edit_original_response(embed);
+
+            dpp::message message(embed);
+            // What will not fit in the embed is attached whole, so the reader still has it
+            if (answer.size() > embed_description_limit) {
+                message.add_file("answer.md", answer, "text/markdown");
+            }
+            event.edit_original_response(message);
         });
     });
 
